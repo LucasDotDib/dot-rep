@@ -6,10 +6,18 @@ const SUPABASE_KEY = "sb_publishable_aFMJ6mg_mVp88E3KzzQYdA_cPA7J5hx";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const C = {
-  bg:"#0e0e0e", surface:"#1a1a1a", surface2:"#222",
-  border:"#2e2e2e", orange:"#f97316", green:"#22c55e",
-  amber:"#f59e0b", red:"#ef4444", white:"#f0f0f0",
-  gray:"#777", grayDim:"#3a3a3a",
+  bg:      "#0b1854",
+  surface: "#132272",
+  surface2:"#1a2d8a",
+  border:  "#2a3f9e",
+  yellow:  "#f5c800",
+  green:   "#22c55e",
+  amber:   "#f59e0b",
+  red:     "#ef4444",
+  white:   "#f0f0dc",
+  gray:    "#7a8fd4",
+  grayDim: "#2a3f9e",
+  cream:   "#f0f0dc",
 };
 
 const TODAY = new Date().toISOString().split("T")[0];
@@ -53,28 +61,28 @@ const TIPOS = Object.keys(TIPO_LABEL);
 
 const STATUS = {
   ok:       { label:"HOJE",       color:"#22c55e", dot:"#22c55e" },
-  recente:  { label:"RECENTE",    color:"#f59e0b", dot:"#f59e0b" },
+  recente:  { label:"RECENTE",    color:"#f5c800", dot:"#f5c800" },
   atrasado: { label:"ATRASADO",   color:"#ef4444", dot:"#ef4444" },
-  nunca:    { label:"SEM VISITA", color:"#3a3a3a", dot:"#3a3a3a" },
+  nunca:    { label:"SEM VISITA", color:"#2a3f9e", dot:"#2a3f9e" },
 };
 
 const ipt = {
   width:"100%", boxSizing:"border-box",
-  background:"#222", border:"1px solid #2e2e2e", borderRadius:8,
-  padding:"11px 13px", fontSize:14, color:"#f0f0f0",
+  background:"#1a2d8a", border:"1px solid #2a3f9e", borderRadius:8,
+  padding:"11px 13px", fontSize:14, color:"#f0f0dc",
   fontFamily:"inherit", outline:"none",
 };
 
 const iptErr = { ...ipt, border:"1px solid #ef444488" };
 
 function Btn({ variant="default", style={}, ...props }) {
-  const base = { cursor:"pointer", borderRadius:8, fontSize:13, fontWeight:600, letterSpacing:"0.03em", border:"none", fontFamily:"inherit" };
+  const base = { cursor:"pointer", borderRadius:8, fontSize:13, fontWeight:700, letterSpacing:"0.03em", border:"none", fontFamily:"inherit" };
   const variants = {
-    orange:  { background:"#f97316", color:"#000" },
-    ghost:   { background:"transparent", border:"1px solid #2e2e2e", color:"#777" },
+    yellow:  { background:"#f5c800", color:"#0b1854" },
+    ghost:   { background:"transparent", border:"1px solid #2a3f9e", color:"#7a8fd4" },
     green:   { background:"#14532d", color:"#22c55e", border:"1px solid #22c55e33" },
     danger:  { background:"transparent", border:"1px solid #ef444455", color:"#ef4444" },
-    default: { background:"#222", border:"1px solid #2e2e2e", color:"#f0f0f0" },
+    default: { background:"#1a2d8a", border:"1px solid #2a3f9e", color:"#f0f0dc" },
   };
   return <button style={{ ...base, ...variants[variant], ...style }} {...props} />;
 }
@@ -95,23 +103,23 @@ function FormPDV({ initial, onSave, onCancel, saving }) {
     <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
       <div>
         <input placeholder="Nome do estabelecimento *" value={form.nome} onChange={e => set("nome", e.target.value)} onKeyDown={e => e.key==="Enter" && submit()} style={errors.nome ? iptErr : ipt} autoFocus />
-        {errors.nome && <p style={{fontSize:11,color:"#ef4444",margin:"3px 0 0"}}>Nome obrigatório</p>}
+        {errors.nome && <p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Nome obrigatório</p>}
       </div>
       <div>
         <input placeholder="Endereço *" value={form.end} onChange={e => set("end", e.target.value)} style={errors.end ? iptErr : ipt} />
-        {errors.end && <p style={{fontSize:11,color:"#ef4444",margin:"3px 0 0"}}>Endereço obrigatório</p>}
+        {errors.end && <p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
       </div>
       <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e => set("cep", fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
         <select value={form.tipo} onChange={e => set("tipo", e.target.value)} style={{...ipt,padding:"11px 10px"}}>
           {TIPOS.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
         </select>
-        <Btn variant={form.prio===1?"orange":"ghost"} style={{padding:"11px 0"}} onClick={() => set("prio", form.prio===1?0:1)}>
+        <Btn variant={form.prio===1?"yellow":"ghost"} style={{padding:"11px 0"}} onClick={() => set("prio", form.prio===1?0:1)}>
           {form.prio===1?"⭐ Prior.":"☆ Prior."}
         </Btn>
       </div>
       <div style={{ display:"flex", gap:8 }}>
-        <Btn variant={form.nome.trim()&&form.end.trim()&&!saving?"orange":"ghost"} style={{flex:1,padding:"12px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.4}} onClick={submit}>
+        <Btn variant={form.nome.trim()&&form.end.trim()&&!saving?"yellow":"ghost"} style={{flex:1,padding:"12px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.4}} onClick={submit}>
           {saving?"Salvando…":"Salvar"}
         </Btn>
         {onCancel && <Btn variant="ghost" style={{padding:"12px 14px"}} onClick={onCancel}>Cancelar</Btn>}
@@ -186,15 +194,15 @@ export default function App() {
   }, []);
 
   if (!stores) return (
-    <div style={{ background:"#0e0e0e", color:"#777", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, fontFamily:"system-ui" }}>
-      <div style={{ width:32, height:32, border:"3px solid #2e2e2e", borderTopColor:"#f97316", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+    <div style={{ background:C.bg, color:C.gray, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, fontFamily:"system-ui" }}>
+      <div style={{ width:32, height:32, border:`3px solid ${C.border}`, borderTopColor:C.yellow, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
       <span style={{ fontSize:13 }}>Conectando…</span>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if (erro) return (
-    <div style={{ background:"#0e0e0e", color:"#ef4444", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center", fontFamily:"system-ui" }}>
+    <div style={{ background:C.bg, color:C.red, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center", fontFamily:"system-ui" }}>
       <div style={{ fontSize:32 }}>⚠️</div>
       <div style={{ fontSize:14, lineHeight:1.6 }}>{erro}</div>
       <Btn variant="ghost" style={{ padding:"10px 20px" }} onClick={() => { setErro(null); carregar(); }}>Tentar novamente</Btn>
@@ -216,21 +224,28 @@ export default function App() {
 
   return (
     <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, color:C.white, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"2rem" }}>
+
+      {/* HEADER */}
       <div style={{ padding:"1.5rem 1rem 1rem", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
           <div>
             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:C.orange }} />
-              <span style={{ fontSize:11, color:C.orange, letterSpacing:"0.12em", textTransform:"uppercase", fontWeight:700 }}>Dot Energy</span>
+              <span style={{ fontSize:16 }}>⚡</span>
+              <span style={{ fontSize:11, color:C.yellow, letterSpacing:"0.12em", textTransform:"uppercase", fontWeight:700 }}>Dot Energy</span>
             </div>
-            <h1 style={{ margin:0, fontSize:26, fontWeight:700, letterSpacing:"-0.02em", color:C.white }}>Rota PDV</h1>
+            <h1 style={{ margin:0, fontSize:26, fontWeight:700, letterSpacing:"-0.02em", color:C.cream }}>Rota PDV</h1>
           </div>
-          <Btn variant={showAdd?"danger":"orange"} style={{padding:"9px 16px"}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
+          <Btn variant={showAdd?"danger":"yellow"} style={{padding:"9px 16px"}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
             {showAdd?"✕ Cancelar":"+ Novo PDV"}
           </Btn>
         </div>
+
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-          {[{label:"TOTAL",value:total,color:C.white},{label:"HOJE",value:hoje,color:hoje>0?C.green:C.gray},{label:"PEND.",value:pend,color:pend>0?C.amber:C.green}].map(s=>(
+          {[
+            { label:"TOTAL", value:total, color:C.cream },
+            { label:"HOJE",  value:hoje,  color:hoje>0?C.green:C.gray },
+            { label:"PEND.", value:pend,  color:pend>0?C.yellow:C.green },
+          ].map(s => (
             <div key={s.label} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
               <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.1em", marginBottom:3 }}>{s.label}</div>
               <div style={{ fontSize:26, fontWeight:700, color:s.color }}>{s.value}</div>
@@ -239,32 +254,35 @@ export default function App() {
         </div>
       </div>
 
-      {showAdd&&(
+      {/* ADD FORM */}
+      {showAdd && (
         <div style={{ margin:"1rem", padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
-          <div style={{ fontSize:10, color:C.orange, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PONTO DE VENDA</div>
+          <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PONTO DE VENDA</div>
           <FormPDV initial={EMPTY_FORM} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} />
         </div>
       )}
 
+      {/* SEARCH + FILTER */}
       <div style={{ padding:"1rem 1rem 0.75rem" }}>
         <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)} style={{...ipt,marginBottom:10}} />
         <div style={{ display:"flex", gap:6, marginBottom:8 }}>
           {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
-            <Btn key={v} variant={filter===v?"orange":"ghost"} style={{flex:1,padding:"7px 0",fontSize:12}} onClick={()=>setFilter(v)}>{l}</Btn>
+            <Btn key={v} variant={filter===v?"yellow":"ghost"} style={{flex:1,padding:"7px 0",fontSize:12}} onClick={()=>setFilter(v)}>{l}</Btn>
           ))}
         </div>
         <div style={{ display:"flex", gap:6 }}>
           <Btn variant={sort==="smart"?"default":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Inteligente</Btn>
-          <Btn variant={sort==="cep"?"orange":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
+          <Btn variant={sort==="cep"?"yellow":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
         </div>
       </div>
 
+      {/* LIST */}
       <div style={{ padding:"0 1rem", display:"flex", flexDirection:"column", gap:8 }}>
         {lista.length===0&&total===0&&(
           <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
             <div style={{ fontSize:44, marginBottom:12 }}>📍</div>
-            <div style={{ fontSize:17, fontWeight:700, color:C.white, marginBottom:8 }}>Nenhum PDV na rota</div>
-            <div style={{ fontSize:13, color:C.gray, lineHeight:1.7 }}>Toque em <span style={{color:C.orange,fontWeight:600}}>+ Novo PDV</span> para adicionar o primeiro ponto.</div>
+            <div style={{ fontSize:17, fontWeight:700, color:C.cream, marginBottom:8 }}>Nenhum PDV na rota</div>
+            <div style={{ fontSize:13, color:C.gray, lineHeight:1.7 }}>Toque em <span style={{color:C.yellow,fontWeight:600}}>+ Novo PDV</span> para adicionar o primeiro ponto.</div>
           </div>
         )}
         {lista.length===0&&total>0&&<div style={{ textAlign:"center", padding:"2rem 0", color:C.gray, fontSize:14 }}>Nenhum PDV encontrado.</div>}
@@ -274,21 +292,23 @@ export default function App() {
           const isExp=expanded===s.id,isEdit=editing===s.id,isFlash=flash===s.id,isDel=confirmDel===s.id,isOk=vs==="ok";
           const obsVal=obs[s.id]!==undefined?obs[s.id]:(s.obs||"");
           const cepFmt=s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):null;
+
           return (
-            <div key={s.id} style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${s.prio===1?C.orange:C.border}`, borderRadius:12, overflow:"hidden" }}>
+            <div key={s.id} style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${s.prio===1?C.yellow:C.border}`, borderRadius:12, overflow:"hidden" }}>
+
               <div style={{ padding:"13px 14px 0" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
                       <div style={{ width:7, height:7, borderRadius:"50%", background:cfg.dot, flexShrink:0 }} />
-                      <span style={{ fontSize:15, fontWeight:600, color:C.white, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</span>
+                      <span style={{ fontSize:15, fontWeight:600, color:C.cream, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</span>
                     </div>
                     <p style={{ margin:"0 0 5px", fontSize:12, color:C.gray, paddingLeft:14 }}>
                       {s.end}{cepFmt?<span style={{color:C.grayDim}}> · {cepFmt}</span>:""}
                     </p>
                     <div style={{ display:"flex", gap:5, flexWrap:"wrap", paddingLeft:14 }}>
                       <span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:C.surface2, color:C.gray }}>{TIPO_LABEL[s.tipo]}</span>
-                      {s.prio===1&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#f9731620", color:C.orange }}>Prioritário</span>}
+                      {s.prio===1&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#f5c80025", color:C.yellow }}>Prioritário</span>}
                       {s.vendeu&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#22c55e20", color:C.green }}>Vende Dot</span>}
                     </div>
                   </div>
@@ -298,8 +318,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
               <div style={{ display:"flex", gap:6, padding:"10px 14px" }}>
-                <Btn variant={isFlash||isOk?"green":"orange"} style={{flex:1,padding:"11px 0",cursor:isOk?"default":"pointer",opacity:isOk?0.65:1}} onClick={()=>!isOk&&marcar(s.id)}>
+                <Btn variant={isFlash||isOk?"green":"yellow"} style={{flex:1,padding:"11px 0",cursor:isOk?"default":"pointer",opacity:isOk?0.7:1}} onClick={()=>!isOk&&marcar(s.id)}>
                   {isFlash?"✓ Registrado!":isOk?"✓ Visitado hoje":"Marcar visita"}
                 </Btn>
                 <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
@@ -309,11 +330,12 @@ export default function App() {
                   {isExp?"▲":"▼"}
                 </Btn>
               </div>
+
               {isExp&&(
                 <div style={{ padding:"12px 14px 14px", borderTop:`1px solid ${C.border}` }}>
                   {isEdit?(
                     <div>
-                      <div style={{ fontSize:10, color:C.orange, letterSpacing:"0.1em", fontWeight:700, marginBottom:12 }}>EDITAR PDV</div>
+                      <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:12 }}>EDITAR PDV</div>
                       <FormPDV initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio}} onSave={(form)=>editar(s.id,form)} onCancel={()=>setEditing(null)} saving={saving} />
                     </div>
                   ):(
@@ -342,7 +364,10 @@ export default function App() {
       {total>0&&(
         <div style={{ margin:"1.25rem 1rem 0", padding:"12px 14px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, textAlign:"center" }}>
           <span style={{ fontSize:12, color:C.gray, fontFamily:"monospace" }}>
-            {hoje===total?<span style={{color:C.green}}>MISSÃO COMPLETA — todos visitados hoje</span>:<><span style={{color:C.green}}>{hoje} visitados</span><span style={{color:C.grayDim}}> · </span><span style={{color:C.amber}}>{pend} pendentes</span><span style={{color:C.grayDim}}> · </span><span>{new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"short"})}</span></>}
+            {hoje===total
+              ?<span style={{color:C.green}}>⚡ MISSÃO COMPLETA — todos visitados hoje</span>
+              :<><span style={{color:C.green}}>{hoje} visitados</span><span style={{color:C.grayDim}}> · </span><span style={{color:C.yellow}}>{pend} pendentes</span><span style={{color:C.grayDim}}> · </span><span style={{color:C.gray}}>{new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"short"})}</span></>
+            }
           </span>
         </div>
       )}
