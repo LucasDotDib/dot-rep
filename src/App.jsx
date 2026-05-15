@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { createClient } from "@supabase/supabase-js";
+
+const MapTab = lazy(() => import("./MapTab"));
 
 const SUPABASE_URL = "https://hmznqqjibxhjkmwizxyn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_aFMJ6mg_mVp88E3KzzQYdA_cPA7J5hx";
@@ -18,10 +20,25 @@ const visitStatus = d => { if (!d) return "nunca"; const n = daysSince(d); if (n
 const fmtDate = d => !d ? null : new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
 const fmtCep = v => { const d=v.replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
 
+const geocode = async (address) => {
+  try {
+    const q = encodeURIComponent(address + ", Brasil");
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+      { headers: { "User-Agent": "dot-rep-crm/3.0" } }
+    );
+    const data = await res.json();
+    if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch {}
+  return null;
+};
+
 const fromDB = r => ({
   id:r.id, nome:r.nome, end:r.endereco||"", cep:r.cep||"", tipo:r.tipo||"facu",
   prio:r.prioridade||0, vendeu:r.vendeu_dot||false, visita:r.ultima_visita||null,
   obs:r.obs||"", rotaId:r.rota_id||null,
+  contato_nome:r.contato_nome||"", contato_tel:r.contato_tel||"",
+  lat:r.lat||null, lng:r.lng||null,
 });
 
 const TIPO_LABEL = { facu:"Faculdade", corp:"Corporativo", armazem:"Armazém", bar:"Bar / Rest.", outro:"Outro" };
@@ -76,6 +93,8 @@ function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
         {errors.end&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
       </div>
       <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
+      <input placeholder="Nome do contato" value={form.contato_nome} onChange={e=>set("contato_nome",e.target.value)} style={ipt} />
+      <input placeholder="Telefone (ex: 11 99999-9999)" value={form.contato_tel} onChange={e=>set("contato_tel",e.target.value)} style={ipt} inputMode="tel" />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
         <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={{...ipt,padding:"11px 10px"}}>
           {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
@@ -98,13 +117,13 @@ function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
   );
 }
 
-// Card visual de PDV reutilizável
-function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving }) {
+function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, historico, onExpand, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving }) {
   const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita?daysSince(s.visita):null;
   const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id, isOk=vs==="ok";
   const obsVal = obs[s.id]!==undefined?obs[s.id]:(s.obs||"");
   const cepFmt = s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):null;
   const rota = rotas.find(r=>r.id===s.rotaId);
+  const hdHist = historico?.[s.id]; // undefined | null (loading) | Visit[]
 
   return (
     <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${s.prio===1?C.yellow:C.border}`, borderRadius:12, overflow:"hidden" }}>
@@ -124,6 +143,14 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
               {s.prio===1&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#f5c80022", color:C.yellow }}>Prioritário</span>}
               {s.vendeu&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#22c55e22", color:C.green }}>Vende Dot</span>}
             </div>
+            {(s.contato_nome||s.contato_tel)&&(
+              <div style={{ paddingLeft:14, marginTop:5, display:"flex", gap:10, flexWrap:"wrap" }}>
+                {s.contato_nome&&<span style={{ fontSize:11, color:C.gray }}>👤 {s.contato_nome}</span>}
+                {s.contato_tel&&(
+                  <a href={`tel:${s.contato_tel}`} style={{ fontSize:11, color:C.yellow, textDecoration:"none" }}>📞 {s.contato_tel}</a>
+                )}
+              </div>
+            )}
           </div>
           <div style={{ textAlign:"right", flexShrink:0 }}>
             <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:cfg.color, marginBottom:2 }}>{cfg.label}</div>
@@ -138,7 +165,7 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
           {s.vendeu?"Dot ✓":"+ Dot"}
         </Btn>
-        <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 10px",fontSize:13}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
+        <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 10px",fontSize:13}} onClick={()=>{onExpand(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
           {isExp?"▲":"▼"}
         </Btn>
       </div>
@@ -147,14 +174,36 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
           {isEdit?(
             <div>
               <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:12 }}>EDITAR PDV</div>
-              <FormPDV initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId}} onSave={(form)=>editar(s.id,form)} onCancel={()=>setEditing(null)} saving={saving} rotas={rotas} />
+              <FormPDV
+                initial={{ nome:s.nome, end:s.end, cep:cepFmt||"", tipo:s.tipo, prio:s.prio, rotaId:s.rotaId, contato_nome:s.contato_nome||"", contato_tel:s.contato_tel||"" }}
+                onSave={(form)=>editar(s.id,form)} onCancel={()=>setEditing(null)} saving={saving} rotas={rotas}
+              />
             </div>
           ):(
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div>
                 <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", marginBottom:5 }}>OBSERVAÇÕES</div>
                 <textarea rows={2} value={obsVal} placeholder="Anotação sobre o PDV…" onChange={e=>setObs(p=>({...p,[s.id]:e.target.value}))} onBlur={()=>saveObs(s.id)} style={{...ipt,resize:"none",fontSize:13}} />
               </div>
+
+              {/* Histórico */}
+              <div>
+                <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", marginBottom:6 }}>HISTÓRICO DE VISITAS</div>
+                {hdHist===null&&<div style={{ fontSize:12, color:C.grayDim }}>Carregando…</div>}
+                {hdHist===undefined&&<div style={{ fontSize:12, color:C.grayDim }}>—</div>}
+                {Array.isArray(hdHist)&&hdHist.length===0&&<div style={{ fontSize:12, color:C.grayDim }}>Nenhuma visita registrada ainda.</div>}
+                {Array.isArray(hdHist)&&hdHist.length>0&&(
+                  <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                    {hdHist.slice(0,8).map(v=>(
+                      <div key={v.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                        <span style={{ fontSize:12, color:C.green, fontFamily:"monospace" }}>✓ {fmtDate(v.data)}</span>
+                        {v.obs&&<span style={{ fontSize:11, color:C.gray, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, textAlign:"right" }}>{v.obs}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display:"flex", gap:6 }}>
                 <Btn variant="default" style={{flex:1,padding:"9px 0",fontSize:12}} onClick={()=>setEditing(s.id)}>✏️ Editar dados</Btn>
                 {isDel?(
@@ -174,9 +223,9 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
 export default function App() {
   const [stores, setStores]   = useState(null);
   const [rotas, setRotas]     = useState([]);
-  const [rotaAtiva, setRotaAtiva] = useState(null); // rota_id
+  const [rotaAtiva, setRotaAtiva] = useState(null);
   const [erro, setErro]       = useState(null);
-  const [aba, setAba]         = useState("hoje"); // hoje | todos | rotas
+  const [aba, setAba]         = useState("hoje");
   const [search, setSearch]   = useState("");
   const [filter, setFilter]   = useState("todos");
   const [sort, setSort]       = useState("smart");
@@ -187,8 +236,9 @@ export default function App() {
   const [saving, setSaving]   = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const [obs, setObs]         = useState({});
+  const [historico, setHistorico] = useState({});
   const [novaRota, setNovaRota] = useState("");
-  const [editRota, setEditRota] = useState(null); // {id, nome}
+  const [editRota, setEditRota] = useState(null);
   const [confirmDelRota, setConfirmDelRota] = useState(null);
 
   const carregar = useCallback(async () => {
@@ -213,18 +263,48 @@ export default function App() {
     return ()=>supabase.removeChannel(ch);
   }, [carregar]);
 
+  const loadHistorico = useCallback(async (id) => {
+    if (!id) return;
+    setHistorico(p => ({ ...p, [id]: null }));
+    const { data } = await supabase.from("visitas").select("*").eq("pdv_id", id).order("data", { ascending:false }).limit(10);
+    setHistorico(p => ({ ...p, [id]: data || [] }));
+  }, []);
+
+  const handleExpand = useCallback((id) => {
+    setExpanded(id);
+    if (id) loadHistorico(id);
+  }, [loadHistorico]);
+
   const adicionar = useCallback(async (form) => {
     setSaving(true);
-    // Se está na aba "hoje" e tem rota ativa, atribui à rota ativa por padrão
     const rotaFinal = form.rotaId || (aba==="hoje"&&rotaAtiva?rotaAtiva:null);
-    const { error } = await supabase.from("pdvs").insert([{ id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(), cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal }]);
+    const coords = await geocode(form.end.trim());
+    const { error } = await supabase.from("pdvs").insert([{
+      id: Date.now().toString(),
+      nome: form.nome.trim(), endereco: form.end.trim(),
+      cep: form.cep.replace(/\D/g,""), tipo: form.tipo,
+      prioridade: form.prio, vendeu_dot: false,
+      ultima_visita: null, obs: "", rota_id: rotaFinal,
+      contato_nome: form.contato_nome?.trim()||"",
+      contato_tel: form.contato_tel?.trim()||"",
+      lat: coords?.lat||null, lng: coords?.lng||null,
+    }]);
     if (error) setErro(error.message); else setShowAdd(false);
     setSaving(false);
   }, [aba, rotaAtiva]);
 
   const editar = useCallback(async (id, form) => {
     setSaving(true);
-    const { error } = await supabase.from("pdvs").update({ nome:form.nome.trim(), endereco:form.end.trim(), cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId }).eq("id", id);
+    const coords = await geocode(form.end.trim());
+    const update = {
+      nome: form.nome.trim(), endereco: form.end.trim(),
+      cep: form.cep.replace(/\D/g,""), tipo: form.tipo,
+      prioridade: form.prio, rota_id: form.rotaId,
+      contato_nome: form.contato_nome?.trim()||"",
+      contato_tel: form.contato_tel?.trim()||"",
+    };
+    if (coords) { update.lat = coords.lat; update.lng = coords.lng; }
+    const { error } = await supabase.from("pdvs").update(update).eq("id", id);
     if (error) setErro(error.message); else setEditing(null);
     setSaving(false);
   }, []);
@@ -235,9 +315,15 @@ export default function App() {
   }, []);
 
   const marcar = useCallback(async (id) => {
-    await atualizar(id, { ultima_visita:TODAY });
-    setFlash(id); setTimeout(()=>setFlash(null), 2000);
-  }, [atualizar]);
+    await Promise.all([
+      atualizar(id, { ultima_visita: TODAY }),
+      supabase.from("visitas").insert([{ id: Date.now().toString(), pdv_id: id, data: TODAY, obs: "" }]),
+    ]);
+    setHistorico(p => ({ ...p, [id]: undefined }));
+    loadHistorico(id);
+    setFlash(id);
+    setTimeout(() => setFlash(null), 2000);
+  }, [atualizar, loadHistorico]);
 
   const saveObs = useCallback(async (id) => {
     if (obs[id]!==undefined) {
@@ -251,7 +337,6 @@ export default function App() {
     if (error) setErro(error.message); else { setExpanded(null); setConfirmDel(null); }
   }, []);
 
-  // Rotas
   const adicionarRota = useCallback(async () => {
     if (!novaRota.trim()) return;
     const { error } = await supabase.from("rotas").insert([{ id:Date.now().toString(), nome:novaRota.trim() }]);
@@ -265,7 +350,6 @@ export default function App() {
   }, []);
 
   const removerRota = useCallback(async (id) => {
-    // Limpa rota dos PDVs antes
     await supabase.from("pdvs").update({ rota_id:null }).eq("rota_id", id);
     if (rotaAtiva === id) await supabase.from("rota_ativa").update({ rota_id:null }).eq("id", 1);
     const { error } = await supabase.from("rotas").delete().eq("id", id);
@@ -298,9 +382,7 @@ export default function App() {
   const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
   const totalRota = pdvsRotaAtiva.length;
   const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
-  const pendRota = totalRota - visitadosRota;
 
-  // Lista para "Todos"
   const listaTodos = stores
     .filter(s => {
       const q=search.toLowerCase(), m=!q||s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q)||(s.cep||"").includes(q);
@@ -312,12 +394,11 @@ export default function App() {
     .sort((a,b)=>sort==="cep"?(a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""))
       :b.prio-a.prio||ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
 
-  // Lista da rota ativa (ordenada por status + CEP)
   const listaHoje = pdvsRotaAtiva
     .slice()
     .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)] || (a.cep||"").localeCompare(b.cep||""));
 
-  const cardProps = { rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving };
+  const cardProps = { rotas, expanded, editing, flash, confirmDel, obs, historico, onExpand:handleExpand, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving };
 
   return (
     <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, color:C.white, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"2rem" }}>
@@ -332,7 +413,7 @@ export default function App() {
             </div>
             <h1 style={{ margin:0, fontSize:26, fontWeight:700, letterSpacing:"-0.02em", color:C.white }}>Rota PDV</h1>
           </div>
-          {aba!=="rotas"&&(
+          {aba!=="rotas"&&aba!=="mapa"&&(
             <Btn variant={showAdd?"danger":"yellow"} style={{padding:"9px 16px"}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
               {showAdd?"✕ Cancelar":"+ Novo PDV"}
             </Btn>
@@ -340,10 +421,10 @@ export default function App() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display:"flex", gap:4, marginTop:8 }}>
-          {[["hoje","🎯 Hoje"],["todos","📋 Todos"],["rotas","📍 Rotas"]].map(([v,l])=>(
+        <div style={{ display:"flex", gap:0, marginTop:8 }}>
+          {[["hoje","🎯 Hoje"],["todos","📋 Todos"],["rotas","📍 Rotas"],["mapa","🗺 Mapa"]].map(([v,l])=>(
             <button key={v} onClick={()=>{setAba(v);setShowAdd(false);}} style={{
-              flex:1, padding:"11px 0", fontSize:13, fontWeight:600, cursor:"pointer",
+              flex:1, padding:"11px 0", fontSize:12, fontWeight:600, cursor:"pointer",
               background:"transparent", border:"none", fontFamily:"inherit",
               color:aba===v?C.yellow:C.gray,
               borderBottom:aba===v?`2px solid ${C.yellow}`:"2px solid transparent",
@@ -367,7 +448,6 @@ export default function App() {
             </div>
           ) : (
             <>
-              {/* Banner de rota ativa */}
               <div style={{ margin:"1rem", padding:"14px 16px", background:`linear-gradient(135deg, #f5c80018, #f5c80008)`, border:`1px solid #f5c80055`, borderRadius:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
@@ -388,15 +468,13 @@ export default function App() {
                 )}
               </div>
 
-              {/* Add form */}
               {showAdd&&(
                 <div style={{ margin:"0 1rem 1rem", padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
                   <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PDV {rotaAtivaObj?`· ROTA ${rotaAtivaObj.nome.toUpperCase()}`:""}</div>
-                  <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:rotaAtiva }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+                  <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:rotaAtiva, contato_nome:"", contato_tel:"" }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
                 </div>
               )}
 
-              {/* List */}
               <div style={{ padding:"0 1rem", display:"flex", flexDirection:"column", gap:8 }}>
                 {listaHoje.length===0?(
                   <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
@@ -424,7 +502,7 @@ export default function App() {
           {showAdd&&(
             <div style={{ margin:"1rem", padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
               <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PONTO DE VENDA</div>
-              <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:null }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+              <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:null, contato_nome:"", contato_tel:"" }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
 
@@ -458,7 +536,6 @@ export default function App() {
       {/* ── ABA ROTAS ── */}
       {aba==="rotas"&&(
         <div style={{ padding:"1rem" }}>
-          {/* Criar rota */}
           <div style={{ padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, marginBottom:14 }}>
             <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:12 }}>NOVA ROTA</div>
             <div style={{ display:"flex", gap:8 }}>
@@ -468,7 +545,6 @@ export default function App() {
             <p style={{ margin:"10px 0 0", fontSize:11, color:C.gray, lineHeight:1.5 }}>Crie regiões pra agrupar os PDVs. Depois ative uma rota e o representante verá apenas os pontos dela na aba <span style={{color:C.yellow}}>Hoje</span>.</p>
           </div>
 
-          {/* Lista de rotas */}
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {rotas.length===0?(
               <div style={{ textAlign:"center", padding:"3rem 1rem", color:C.gray, fontSize:13 }}>Nenhuma rota criada ainda.</div>
@@ -523,6 +599,19 @@ export default function App() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── ABA MAPA ── */}
+      {aba==="mapa"&&(
+        <Suspense fallback={
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100dvh - 130px)", color:C.gray, fontSize:13, gap:10 }}>
+            <div style={{ width:20, height:20, border:`2px solid ${C.border}`, borderTopColor:C.yellow, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+            Carregando mapa…
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        }>
+          <MapTab stores={stores} visitStatus={visitStatus} />
+        </Suspense>
       )}
     </div>
   );
