@@ -1,6 +1,5 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { useState } from 'react';
 
 const STATUS_COLORS = { ok:'#22c55e', recente:'#f59e0b', atrasado:'#ef4444', nunca:'#444' };
