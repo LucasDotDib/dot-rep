@@ -14,6 +14,7 @@ export default function AdminView({ onLogout }) {
   const [showAdd, setShowAdd]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [selectedPdv, setSelectedPdv] = useState(null);
+  const [editingPdv, setEditingPdv]   = useState(null);
   const [searchPdv, setSearchPdv]     = useState("");
 
   // Rotas tab
@@ -57,6 +58,16 @@ export default function AdminView({ onLogout }) {
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:form.rotaId||null,
     }]);
     if (error) setErro(error.message); else setShowAdd(false);
+    setSaving(false);
+  }, []);
+
+  const editar = useCallback(async (id, form) => {
+    setSaving(true);
+    const { error } = await supabase.from("pdvs").update({
+      nome:form.nome.trim(), endereco:form.end.trim(),
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId,
+    }).eq("id", id);
+    if (error) setErro(error.message); else setEditingPdv(null);
     setSaving(false);
   }, []);
 
@@ -301,28 +312,48 @@ export default function AdminView({ onLogout }) {
                     </div>
                     {isSelected&&(
                       <div style={{ padding:"0 14px 14px", borderTop:`1px solid ${C.border}` }}>
-                        {s.obs&&(
-                          <div style={{ padding:"10px 0 6px", fontSize:12, color:C.gray, borderBottom:`1px solid ${C.border}`, marginBottom:10 }}>
-                            <span style={{ color:C.grayDim, fontSize:10 }}>OBS: </span>{s.obs}
+                        {editingPdv===s.id ? (
+                          <div style={{ paddingTop:12 }}>
+                            <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:12 }}>EDITAR PDV</div>
+                            <FormPDV
+                              initial={{ nome:s.nome, end:s.end, cep:s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):"", tipo:s.tipo, prio:s.prio, rotaId:s.rotaId }}
+                              onSave={(form)=>editar(s.id, form)}
+                              onCancel={()=>setEditingPdv(null)}
+                              saving={saving}
+                              rotas={rotas}
+                            />
                           </div>
-                        )}
-                        {hist.length===0 ? (
-                          <div style={{ padding:"12px 0", textAlign:"center", color:C.gray, fontSize:12 }}>Nenhuma visita registrada.</div>
                         ) : (
                           <>
-                            <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", margin:"10px 0 6px" }}>HISTÓRICO</div>
-                            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                              {hist.map(v=>(
-                                <div key={v.id} style={{ fontSize:12, padding:"8px 10px", background:C.surface2, borderRadius:7, display:"flex", gap:8, alignItems:"flex-start" }}>
-                                  <span style={{ color:C.yellow, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
-                                  <span style={{ color:C.grayDim, fontSize:11, flexShrink:0 }}>{fmtTime(v.criado_em)}</span>
-                                  {v.obs
-                                    ? <span style={{ color:C.gray, lineHeight:1.4 }}>{v.obs}</span>
-                                    : <span style={{ color:C.grayDim, fontStyle:"italic" }}>sem obs.</span>
-                                  }
-                                </div>
-                              ))}
+                            <div style={{ paddingTop:10 }}>
+                              <Btn variant="default" style={{ width:"100%", padding:"9px 0", fontSize:12, marginBottom:10 }} onClick={()=>setEditingPdv(s.id)}>
+                                ✏️ Editar dados / rota
+                              </Btn>
                             </div>
+                            {s.obs&&(
+                              <div style={{ padding:"8px 0 6px", fontSize:12, color:C.gray, borderBottom:`1px solid ${C.border}`, marginBottom:10 }}>
+                                <span style={{ color:C.grayDim, fontSize:10 }}>OBS: </span>{s.obs}
+                              </div>
+                            )}
+                            {hist.length===0 ? (
+                              <div style={{ padding:"4px 0 2px", textAlign:"center", color:C.gray, fontSize:12 }}>Nenhuma visita registrada.</div>
+                            ) : (
+                              <>
+                                <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", marginBottom:6 }}>HISTÓRICO</div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                                  {hist.map(v=>(
+                                    <div key={v.id} style={{ fontSize:12, padding:"8px 10px", background:C.surface2, borderRadius:7, display:"flex", gap:8, alignItems:"flex-start" }}>
+                                      <span style={{ color:C.yellow, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
+                                      <span style={{ color:C.grayDim, fontSize:11, flexShrink:0 }}>{fmtTime(v.criado_em)}</span>
+                                      {v.obs
+                                        ? <span style={{ color:C.gray, lineHeight:1.4 }}>{v.obs}</span>
+                                        : <span style={{ color:C.grayDim, fontStyle:"italic" }}>sem obs.</span>
+                                      }
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
