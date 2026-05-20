@@ -138,9 +138,9 @@ export default function AdminView({ onLogout }) {
           </div>
         </div>
         <div style={{ display:"flex", gap:0, marginTop:8 }}>
-          {[["geral","📊"],["historico","📅"],["pdvs","🏪"],["rotas","📍"],["pendentes","⚠️"]].map(([v,l])=>(
+          {[["geral","📊 Geral"],["historico","📅 Dia"],["pdvs","🏪 PDVs"],["rotas","📍 Rotas"],["pendentes","⚠️ Pend."]].map(([v,l])=>(
             <button key={v} onClick={()=>{setAba(v);setShowAdd(false);}} style={{
-              flex:1, padding:"11px 0", fontSize:16, cursor:"pointer",
+              flex:1, padding:"11px 0", fontSize:11, fontWeight:600, cursor:"pointer",
               background:"transparent", border:"none", fontFamily:"inherit",
               color:aba===v?C.yellow:C.gray,
               borderBottom:aba===v?`2px solid ${C.yellow}`:"2px solid transparent",
