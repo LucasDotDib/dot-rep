@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export const C = {
   bg:"#0e0e0e", surface:"#1a1a1a", surface2:"#222", border:"#2e2e2e",
   yellow:"#f5c800", green:"#22c55e", amber:"#f59e0b", red:"#ef4444",
@@ -48,3 +50,51 @@ export const STATUS = {
 };
 
 export const ORDER = { nunca:0, atrasado:1, recente:2, ok:3 };
+
+export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
+  const [form, setForm] = useState(initial);
+  const [errors, setErrors] = useState({});
+  const set = (k, v) => { setForm(f=>({...f,[k]:v})); setErrors(e=>({...e,[k]:false})); };
+  const validar = () => {
+    const e = {};
+    if (!form.nome.trim()) e.nome = true;
+    if (!form.end.trim())  e.end  = true;
+    setErrors(e); return Object.keys(e).length === 0;
+  };
+  const submit = () => { if (validar()) onSave(form); };
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+      <div>
+        <input placeholder="Nome do estabelecimento *" value={form.nome} onChange={e=>set("nome",e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} style={errors.nome?iptErr:ipt} autoFocus />
+        {errors.nome&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Nome obrigatório</p>}
+      </div>
+      <div>
+        <input placeholder="Endereço *" value={form.end} onChange={e=>set("end",e.target.value)} style={errors.end?iptErr:ipt} />
+        {errors.end&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
+      </div>
+      <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
+        <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={{...ipt,padding:"11px 10px"}}>
+          {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
+        </select>
+        <Btn variant={form.prio===1?"yellow":"ghost"} style={{padding:"11px 0"}} onClick={()=>set("prio",form.prio===1?0:1)}>
+          {form.prio===1?"⭐ Prior.":"☆ Prior."}
+        </Btn>
+      </div>
+      <select value={form.rotaId||""} onChange={e=>set("rotaId",e.target.value||null)} style={{...ipt,padding:"11px 10px"}}>
+        <option value="">Sem rota</option>
+        {rotas.map(r=><option key={r.id} value={r.id}>📍 {r.nome}</option>)}
+      </select>
+      <div style={{ display:"flex", gap:8 }}>
+        <Btn
+          variant={form.nome.trim()&&form.end.trim()&&!saving?"yellow":"ghost"}
+          style={{flex:1,padding:"12px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.4}}
+          onClick={submit}
+        >
+          {saving?"Salvando…":"Salvar"}
+        </Btn>
+        {onCancel&&<Btn variant="ghost" style={{padding:"12px 14px"}} onClick={onCancel}>Cancelar</Btn>}
+      </div>
+    </div>
+  );
+}

@@ -1,54 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
-import { C, ipt, iptErr, Btn, TODAY, daysSince, visitStatus, fmtDate, fmtCep, fromDB, TIPO_LABEL, TIPOS, STATUS, ORDER } from "./ui";
-
-function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
-  const [form, setForm] = useState(initial);
-  const [errors, setErrors] = useState({});
-  const set = (k, v) => { setForm(f=>({...f,[k]:v})); setErrors(e=>({...e,[k]:false})); };
-  const validar = () => {
-    const e = {};
-    if (!form.nome.trim()) e.nome = true;
-    if (!form.end.trim())  e.end  = true;
-    setErrors(e); return Object.keys(e).length === 0;
-  };
-  const submit = () => { if (validar()) onSave(form); };
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-      <div>
-        <input placeholder="Nome do estabelecimento *" value={form.nome} onChange={e=>set("nome",e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} style={errors.nome?iptErr:ipt} autoFocus />
-        {errors.nome&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Nome obrigatório</p>}
-      </div>
-      <div>
-        <input placeholder="Endereço *" value={form.end} onChange={e=>set("end",e.target.value)} style={errors.end?iptErr:ipt} />
-        {errors.end&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
-      </div>
-      <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
-        <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={{...ipt,padding:"11px 10px"}}>
-          {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
-        </select>
-        <Btn variant={form.prio===1?"yellow":"ghost"} style={{padding:"11px 0"}} onClick={()=>set("prio",form.prio===1?0:1)}>
-          {form.prio===1?"⭐ Prior.":"☆ Prior."}
-        </Btn>
-      </div>
-      <select value={form.rotaId||""} onChange={e=>set("rotaId",e.target.value||null)} style={{...ipt,padding:"11px 10px"}}>
-        <option value="">Sem rota</option>
-        {rotas.map(r=><option key={r.id} value={r.id}>📍 {r.nome}</option>)}
-      </select>
-      <div style={{ display:"flex", gap:8 }}>
-        <Btn
-          variant={form.nome.trim()&&form.end.trim()&&!saving?"yellow":"ghost"}
-          style={{flex:1,padding:"12px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.4}}
-          onClick={submit}
-        >
-          {saving?"Salvando…":"Salvar"}
-        </Btn>
-        {onCancel&&<Btn variant="ghost" style={{padding:"12px 14px"}} onClick={onCancel}>Cancelar</Btn>}
-      </div>
-    </div>
-  );
-}
+import { C, ipt, iptErr, Btn, FormPDV, TODAY, daysSince, visitStatus, fmtDate, fmtCep, fromDB, TIPO_LABEL, TIPOS, STATUS, ORDER } from "./ui";
 
 function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving, marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
   const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita?daysSince(s.visita):null;
@@ -193,7 +145,7 @@ export default function RepView({ onLogout }) {
   const [rotaAtiva, setRotaAtiva] = useState(null);
   const [historico, setHistorico] = useState({});
   const [erro, setErro]           = useState(null);
-  const [aba, setAba]             = useState("hoje");
+  const [aba, setAba]             = useState("hoje"); // hoje | todos | rotas
   const [search, setSearch]       = useState("");
   const [filter, setFilter]       = useState("todos");
   const [sort, setSort]           = useState("smart");
@@ -204,9 +156,6 @@ export default function RepView({ onLogout }) {
   const [saving, setSaving]       = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const [obs, setObs]             = useState({});
-  const [novaRota, setNovaRota]   = useState("");
-  const [editRota, setEditRota]   = useState(null);
-  const [confirmDelRota, setConfirmDelRota] = useState(null);
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs, setMarcObs]     = useState("");
 
@@ -288,30 +237,6 @@ export default function RepView({ onLogout }) {
   const remover = useCallback(async (id) => {
     const { error } = await supabase.from("pdvs").delete().eq("id", id);
     if (error) setErro(error.message); else { setExpanded(null); setConfirmDel(null); }
-  }, []);
-
-  const adicionarRota = useCallback(async () => {
-    if (!novaRota.trim()) return;
-    const { error } = await supabase.from("rotas").insert([{ id:Date.now().toString(), nome:novaRota.trim() }]);
-    if (error) setErro(error.message); else setNovaRota("");
-  }, [novaRota]);
-
-  const renomearRota = useCallback(async (id, nome) => {
-    if (!nome.trim()) return;
-    const { error } = await supabase.from("rotas").update({ nome:nome.trim() }).eq("id", id);
-    if (error) setErro(error.message); else setEditRota(null);
-  }, []);
-
-  const removerRota = useCallback(async (id) => {
-    await supabase.from("pdvs").update({ rota_id:null }).eq("rota_id", id);
-    if (rotaAtiva === id) await supabase.from("rota_ativa").update({ rota_id:null }).eq("id", 1);
-    const { error } = await supabase.from("rotas").delete().eq("id", id);
-    if (error) setErro(error.message); else setConfirmDelRota(null);
-  }, [rotaAtiva]);
-
-  const ativarRota = useCallback(async (id) => {
-    const { error } = await supabase.from("rota_ativa").update({ rota_id:id, ativada_em:new Date().toISOString() }).eq("id", 1);
-    if (error) setErro(error.message);
   }, []);
 
   if (!stores) return (
@@ -397,10 +322,9 @@ export default function RepView({ onLogout }) {
             <div style={{ padding:"2.5rem 1.25rem", textAlign:"center" }}>
               <div style={{ fontSize:44, marginBottom:14 }}>🎯</div>
               <div style={{ fontSize:17, fontWeight:700, color:C.white, marginBottom:8 }}>Nenhuma rota ativa</div>
-              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6, marginBottom:20 }}>
-                Vai pra aba <span style={{color:C.yellow,fontWeight:600}}>📍 Rotas</span> e ativa qual rota o representante vai cobrir hoje.
+              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>
+                Aguarde o admin ativar a rota do dia.
               </div>
-              <Btn variant="yellow" style={{ padding:"11px 24px" }} onClick={()=>setAba("rotas")}>Ir para Rotas</Btn>
             </div>
           ) : (
             <>
@@ -483,63 +407,38 @@ export default function RepView({ onLogout }) {
 
       {aba==="rotas"&&(
         <div style={{ padding:"1rem" }}>
-          <div style={{ padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, marginBottom:14 }}>
-            <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:12 }}>NOVA ROTA</div>
-            <div style={{ display:"flex", gap:8 }}>
-              <input placeholder="Ex: Paulista, Itaim, Faria Lima…" value={novaRota} onChange={e=>setNovaRota(e.target.value)} onKeyDown={e=>e.key==="Enter"&&adicionarRota()} style={ipt} />
-              <Btn variant={novaRota.trim()?"yellow":"ghost"} style={{padding:"11px 18px",opacity:novaRota.trim()?1:0.4}} onClick={adicionarRota}>+</Btn>
+          {rotaAtivaObj&&(
+            <div style={{ padding:"14px 16px", background:`linear-gradient(135deg, #f5c80018, #f5c80008)`, border:`1px solid #f5c80055`, borderRadius:12, marginBottom:14 }}>
+              <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:3 }}>ROTA ATIVA HOJE</div>
+              <div style={{ fontSize:18, fontWeight:700, color:C.white }}>📍 {rotaAtivaObj.nome}</div>
+              <div style={{ fontSize:12, color:C.gray, marginTop:4 }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados hoje</div>
+              {pdvsRotaAtiva.length>0&&(
+                <div style={{ marginTop:10, height:4, background:C.surface2, borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:C.yellow, transition:"width 0.4s" }} />
+                </div>
+              )}
             </div>
-            <p style={{ margin:"10px 0 0", fontSize:11, color:C.gray, lineHeight:1.5 }}>Crie regiões pra agrupar os PDVs. Depois ative uma rota e o representante verá apenas os pontos dela na aba <span style={{color:C.yellow}}>Hoje</span>.</p>
-          </div>
+          )}
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {rotas.length===0 ? (
-              <div style={{ textAlign:"center", padding:"3rem 1rem", color:C.gray, fontSize:13 }}>Nenhuma rota criada ainda.</div>
+              <div style={{ textAlign:"center", padding:"3rem 1rem", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
             ) : rotas.map(r=>{
               const qtd = stores.filter(s=>s.rotaId===r.id).length;
               const isActive = rotaAtiva===r.id;
-              const isEditingR = editRota?.id===r.id;
-              const isDelR = confirmDelRota===r.id;
               return (
-                <div key={r.id} style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:12, padding:"14px" }}>
-                  {isEditingR ? (
-                    <div style={{ display:"flex", gap:6 }}>
-                      <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus />
-                      <Btn variant="yellow" style={{padding:"11px 14px",fontSize:12}} onClick={()=>renomearRota(r.id,editRota.nome)}>OK</Btn>
-                      <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12}} onClick={()=>setEditRota(null)}>✕</Btn>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                        <div>
-                          <div style={{ fontSize:16, fontWeight:600, color:C.white, marginBottom:2 }}>📍 {r.nome}</div>
-                          <div style={{ fontSize:12, color:C.gray }}>{qtd} PDV{qtd!==1?"s":""}</div>
-                        </div>
-                        {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 8px", borderRadius:99, background:`${C.yellow}22`, color:C.yellow, letterSpacing:"0.08em" }}>ATIVA HOJE</span>}
-                      </div>
-                      <div style={{ display:"flex", gap:6 }}>
-                        {!isActive ? (
-                          <Btn variant="yellow" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>ativarRota(r.id)}>🎯 Ativar para hoje</Btn>
-                        ) : (
-                          <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12,opacity:0.8,cursor:"default"}}>✓ Em andamento</Btn>
-                        )}
-                        <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️</Btn>
-                        {isDelR ? (
-                          <>
-                            <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
-                            <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
-                          </>
-                        ) : (
-                          <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
-                        )}
-                      </div>
-                    </>
-                  )}
+                <div key={r.id} style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:12, padding:"14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontSize:16, fontWeight:600, color:C.white, marginBottom:2 }}>📍 {r.nome}</div>
+                    <div style={{ fontSize:12, color:C.gray }}>{qtd} PDV{qtd!==1?"s":""}</div>
+                  </div>
+                  {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 8px", borderRadius:99, background:`${C.yellow}22`, color:C.yellow, letterSpacing:"0.08em" }}>ATIVA HOJE</span>}
                 </div>
               );
             })}
           </div>
         </div>
       )}
+
     </div>
   );
 }
