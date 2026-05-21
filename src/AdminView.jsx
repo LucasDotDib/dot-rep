@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
-import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtTime, fromDB, TIPO_LABEL, ORDER, visitStatus } from "./ui";
+import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtTime, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
 const FONT = "'Poppins', sans-serif";
+const URG_ORDER = { critica:0, media:1, ok:2 };
+const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
 
 export default function AdminView({ onLogout }) {
   const [aba,       setAba]       = useState("geral");
@@ -12,8 +14,8 @@ export default function AdminView({ onLogout }) {
   const [rotaAtiva, setRotaAtiva] = useState(null);
   const [erro,      setErro]      = useState(null);
 
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [saving,     setSaving]     = useState(false);
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [saving,      setSaving]      = useState(false);
   const [selectedPdv, setSelectedPdv] = useState(null);
   const [editingPdv,  setEditingPdv]  = useState(null);
   const [searchPdv,   setSearchPdv]   = useState("");
@@ -53,7 +55,7 @@ export default function AdminView({ onLogout }) {
     setSaving(true);
     const { error } = await supabase.from("pdvs").insert([{
       id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio,
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:form.rotaId||null,
     }]);
     if (error) setErro(error.message); else setShowAdd(false);
@@ -64,7 +66,7 @@ export default function AdminView({ onLogout }) {
     setSaving(true);
     const { error } = await supabase.from("pdvs").update({
       nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId,
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
     }).eq("id", id);
     if (error) setErro(error.message); else setEditingPdv(null);
     setSaving(false);
@@ -109,9 +111,9 @@ export default function AdminView({ onLogout }) {
     </div>
   );
 
-  const rotaAtivaObj    = rotas.find(r=>r.id===rotaAtiva);
-  const pdvsRotaAtiva   = stores.filter(s=>s.rotaId===rotaAtiva);
-  const visitadosHoje   = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
+  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
+  const visitadosHoje = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
 
   const visitasPorPdv = {};
   for (const v of visitas) {
@@ -164,8 +166,6 @@ export default function AdminView({ onLogout }) {
       {/* ── ABA GERAL ── */}
       {aba==="geral"&&(
         <div style={{ padding:"16px 16px 0" }}>
-
-          {/* Banner rota ativa */}
           <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA HOJE</div>
             {rotaAtivaObj ? (
@@ -188,13 +188,12 @@ export default function AdminView({ onLogout }) {
             )}
           </div>
 
-          {/* Stats 2x2 */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             {[
-              { label:"Total de PDVs",   val:stores.length,                                                                     icon:"ti-building-store", iconBg:"#eff6ff",  iconColor:C.blue   },
-              { label:"Visitas hoje",    val:visitas.filter(v=>v.data===TODAY).length,                                          icon:"ti-circle-check",  iconBg:C.greenDim, iconColor:C.green  },
-              { label:"Esta semana",     val:visitas.filter(v=>{ const d=daysSince(v.data); return d!==null&&d<=6; }).length,   icon:"ti-calendar-week", iconBg:C.amberDim, iconColor:C.amber  },
-              { label:"Nunca visitados", val:stores.filter(s=>!s.visita).length,                                                icon:"ti-alert-triangle",iconBg:C.redDim,   iconColor:C.red    },
+              { label:"Total de PDVs",   val:stores.length,                                                                   icon:"ti-building-store", iconBg:"#eff6ff",  iconColor:C.blue  },
+              { label:"Visitas hoje",    val:visitas.filter(v=>v.data===TODAY).length,                                        icon:"ti-circle-check",  iconBg:C.greenDim, iconColor:C.green },
+              { label:"Esta semana",     val:visitas.filter(v=>{ const d=daysSince(v.data); return d!==null&&d<=6; }).length, icon:"ti-calendar-week", iconBg:C.amberDim, iconColor:C.amber },
+              { label:"Nunca visitados", val:stores.filter(s=>!s.visita).length,                                              icon:"ti-alert-triangle",iconBg:C.redDim,   iconColor:C.red   },
             ].map(({ label, val, icon, iconBg, iconColor })=>(
               <div key={label} style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"16px 14px" }}>
                 <div style={{ width:38, height:38, borderRadius:12, background:iconBg, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
@@ -206,7 +205,6 @@ export default function AdminView({ onLogout }) {
             ))}
           </div>
 
-          {/* Pendentes na rota */}
           {rotaAtivaObj&&pdvsRotaAtiva.length>0&&(
             <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px" }}>
               <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:10 }}>PENDENTES NA ROTA DE HOJE</div>
@@ -236,7 +234,6 @@ export default function AdminView({ onLogout }) {
               Ir para hoje
             </Btn>
           )}
-
           {visitasDoDia.length===0 ? (
             <div style={{ textAlign:"center", padding:"4rem 0" }}>
               <i className="ti ti-calendar-off" style={{ fontSize:40, color:C.gray }} />
@@ -295,21 +292,21 @@ export default function AdminView({ onLogout }) {
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {stores
               .filter(s=>!searchPdv||s.nome.toLowerCase().includes(searchPdv.toLowerCase())||(s.end||"").toLowerCase().includes(searchPdv.toLowerCase()))
-              .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)])
+              .sort((a,b)=>URG_ORDER[getUrgencia(a.visita)]-URG_ORDER[getUrgencia(b.visita)] || cepCmp(a,b))
               .map(s=>{
                 const hist = visitasPorPdv[s.id]||[];
                 const isSelected = selectedPdv===s.id;
+                const cfg = URGENCIA[getUrgencia(s.visita)];
                 const d = s.visita ? daysSince(s.visita) : null;
-                const barColor = !s.visita?"#d1d5db":d===0?C.green:d<=14?C.amber:C.red;
                 return (
-                  <div key={s.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${barColor}`, borderRadius:14, overflow:"hidden" }}>
+                  <div key={s.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, borderRadius:14, overflow:"hidden" }}>
                     <div style={{ padding:"13px 14px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }} onClick={()=>setSelectedPdv(isSelected?null:s.id)}>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:14, fontWeight:600, color:C.text }}>{s.nome}</div>
                         <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{TIPO_LABEL[s.tipo]} · {s.end}</div>
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:barColor }}>{d!==null?d===0?"hoje":`${d}d atrás`:"nunca"}</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:cfg.barColor }}>{d!==null?d===0?"hoje":`${d}d atrás`:"nunca"}</div>
                         <div style={{ fontSize:10, color:C.gray }}>{hist.length} visita{hist.length!==1?"s":""}</div>
                       </div>
                     </div>
@@ -429,38 +426,54 @@ export default function AdminView({ onLogout }) {
       {/* ── ABA PENDENTES ── */}
       {aba==="pendentes"&&(
         <div style={{ padding:"16px 16px 0" }}>
+          {/* Contadores */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
             {[
-              { label:"Nunca",  val:stores.filter(s=>!s.visita).length,                         color:C.gray  },
-              { label:"+30d",   val:stores.filter(s=>s.visita&&daysSince(s.visita)>30).length,  color:C.red   },
-              { label:"Em dia", val:stores.filter(s=>s.visita&&daysSince(s.visita)<=14).length, color:C.green },
-            ].map(({ label, val, color })=>(
+              { label:"URGENTE",  val:stores.filter(s=>getUrgencia(s.visita)==="critica").length, color:"#ef4444", bg:"#fef2f2" },
+              { label:"PENDENTE", val:stores.filter(s=>getUrgencia(s.visita)==="media").length,   color:"#d97706", bg:"#fffbeb" },
+              { label:"EM DIA",   val:stores.filter(s=>getUrgencia(s.visita)==="ok").length,      color:"#16a34a", bg:"#f0fdf4" },
+            ].map(({ label, val, color, bg })=>(
               <div key={label} style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:14, padding:"12px 0", textAlign:"center" }}>
                 <div style={{ fontSize:20, fontWeight:700, color, fontVariantNumeric:"tabular-nums" }}>{val}</div>
                 <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>{label}</div>
               </div>
             ))}
           </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {stores
-              .sort((a,b)=>{ const da=a.visita?daysSince(a.visita):9999, db=b.visita?daysSince(b.visita):9999; return db-da; })
-              .map(s=>{
-                const d = s.visita ? daysSince(s.visita) : null;
-                const color = !s.visita?"#d1d5db":d>30?C.red:d>14?C.amber:C.green;
-                return (
-                  <div key={s.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${color}`, borderRadius:12, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:14, fontWeight:600, color:C.text }}>{s.nome}</div>
-                      <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{TIPO_LABEL[s.tipo]} · {s.end}</div>
-                    </div>
-                    <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
-                      <div style={{ fontSize:14, fontWeight:700, color, fontVariantNumeric:"tabular-nums" }}>{d!==null?`${d}d`:"nunca"}</div>
-                      {s.visita&&<div style={{ fontSize:10, color:C.gray }}>{fmtDate(s.visita)}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+
+          {/* Seções por urgência */}
+          {[
+            { urg:"critica", icon:"🔴", label:"Urgente",   hColor:"#991b1b", hBg:"#fef2f2" },
+            { urg:"media",   icon:"🟡", label:"Pendentes", hColor:"#92400e", hBg:"#fffbeb" },
+            { urg:"ok",      icon:"✅", label:"Em dia",    hColor:"#166534", hBg:"#f0fdf4" },
+          ].map(({ urg, icon, label, hColor, hBg })=>{
+            const pdvs = stores.filter(s=>getUrgencia(s.visita)===urg).sort(cepCmp);
+            if (pdvs.length===0) return null;
+            const cfg = URGENCIA[urg];
+            return (
+              <div key={urg} style={{ marginBottom:14 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:hColor, letterSpacing:"0.06em", padding:"8px 12px", background:hBg, borderRadius:10, marginBottom:8 }}>
+                  {icon} {label} ({pdvs.length})
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                  {pdvs.map(s=>{
+                    const d = s.visita ? daysSince(s.visita) : null;
+                    return (
+                      <div key={s.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, borderRadius:12, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:14, fontWeight:600, color:C.text }}>{s.nome}</div>
+                          <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{TIPO_LABEL[s.tipo]} · {s.end}</div>
+                        </div>
+                        <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color:cfg.barColor, fontVariantNumeric:"tabular-nums" }}>{d!==null?`${d}d`:"nunca"}</div>
+                          {s.visita&&<div style={{ fontSize:10, color:C.gray }}>{fmtDate(s.visita)}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

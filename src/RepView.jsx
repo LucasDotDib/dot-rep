@@ -1,16 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
-import { C, ipt, iptErr, Btn, FormPDV, TODAY, daysSince, visitStatus, fmtDate, fmtCep, fromDB, TIPO_LABEL, TIPOS, STATUS, ORDER } from "./ui";
+import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtCep, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
 const FONT = "'Poppins', sans-serif";
+const URG_ORDER = { critica:0, media:1, ok:2 };
+const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
 
 function Tag({ children, bg="#f5f6fa", color="#6b7280" }) {
   return <span style={{ fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:99, background:bg, color, whiteSpace:"nowrap" }}>{children}</span>;
 }
 
+function SectionHead({ icon, label, count, color, bg, collapsible, collapsed, onToggle }) {
+  return (
+    <div
+      onClick={collapsible ? onToggle : undefined}
+      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 12px", background:bg, borderRadius:10, marginBottom:8, cursor:collapsible?"pointer":undefined }}
+    >
+      <span style={{ fontSize:12, fontWeight:700, color, letterSpacing:"0.04em" }}>{icon} {label} ({count})</span>
+      {collapsible && <span style={{ fontSize:12, color }}>{collapsed ? "›" : "↓"}</span>}
+    </div>
+  );
+}
+
 function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving, marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
-  const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita ? daysSince(s.visita) : null;
-  const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id, isOk=vs==="ok";
+  const urg = getUrgencia(s.visita), cfg = URGENCIA[urg];
+  const isVisitedToday = daysSince(s.visita) === 0;
+  const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id;
   const isMarcando = marcandoId===s.id;
   const obsVal = obs[s.id]!==undefined ? obs[s.id] : (s.obs||"");
   const cepFmt = s.cep ? s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):"") : null;
@@ -18,31 +33,23 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
   const hist = historico[s.id]||[];
 
   return (
-    <div style={{
-      background:C.white, borderRadius:16,
-      border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.color}`,
-      overflow:"hidden",
-    }}>
+    <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, overflow:"hidden" }}>
       <div style={{ padding:"14px 14px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:15, fontWeight:600, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{s.end}{cepFmt ? ` · ${cepFmt}` : ""}</div>
           </div>
-          <span style={{
-            fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99, flexShrink:0,
-            background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.04em",
-          }}>{cfg.label}</span>
+          <span style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99, flexShrink:0, background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.04em" }}>{cfg.label}</span>
         </div>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, marginBottom:2 }}>
           <Tag>{TIPO_LABEL[s.tipo]}</Tag>
           {rota   && <Tag bg="#eff6ff" color={C.blue}>📍 {rota.nome}</Tag>}
-          {s.prio===1 && <Tag bg={C.yellowDim} color="#92400e">⭐ Prior.</Tag>}
-          {s.vendeu   && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
+          {s.vendeu && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
         </div>
       </div>
 
-      {isMarcando&&!isOk&&(
+      {isMarcando&&!isVisitedToday&&(
         <div style={{ padding:"8px 14px 0" }}>
           <input
             placeholder="Observação da visita (opcional)…"
@@ -56,7 +63,7 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
       )}
 
       <div style={{ display:"flex", gap:7, padding:"10px 14px" }}>
-        {isMarcando&&!isOk ? (
+        {isMarcando&&!isVisitedToday ? (
           <>
             <Btn variant="blue" style={{flex:1,padding:"11px 0",borderRadius:10,fontSize:13}} onClick={()=>marcar(s.id, marcObs)}>
               ✓ Confirmar visita
@@ -68,11 +75,11 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         ) : (
           <>
             <Btn
-              variant={isFlash||isOk ? "green" : "yellow"}
-              style={{flex:1, padding:"11px 0", borderRadius:10, fontWeight:700, cursor:isOk?"default":"pointer", opacity:isOk?0.7:1}}
-              onClick={()=>!isOk&&setMarcandoId(s.id)}
+              variant={isFlash||isVisitedToday ? "green" : "yellow"}
+              style={{flex:1, padding:"11px 0", borderRadius:10, fontWeight:700, cursor:isVisitedToday?"default":"pointer", opacity:isVisitedToday?0.7:1}}
+              onClick={()=>!isVisitedToday&&setMarcandoId(s.id)}
             >
-              {isFlash ? "✓ Registrado!" : isOk ? "✓ Visitado hoje" : "Marcar visita"}
+              {isFlash ? "✓ Registrado!" : isVisitedToday ? "✓ Visitado hoje" : "Marcar visita"}
             </Btn>
             <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
               {s.vendeu?"Dot ✓":"+ Dot"}
@@ -115,10 +122,7 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
                     {hist.map(v=>(
                       <div key={v.id} style={{ fontSize:12, padding:"8px 11px", background:C.grayDim, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
                         <span style={{ color:C.blue, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
-                        {v.obs
-                          ? <span style={{ color:C.muted, lineHeight:1.4 }}>{v.obs}</span>
-                          : <span style={{ color:C.gray, fontStyle:"italic" }}>sem obs.</span>
-                        }
+                        {v.obs ? <span style={{ color:C.muted, lineHeight:1.4 }}>{v.obs}</span> : <span style={{ color:C.gray, fontStyle:"italic" }}>sem obs.</span>}
                       </div>
                     ))}
                   </div>
@@ -144,24 +148,25 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
 }
 
 export default function RepView({ onLogout }) {
-  const [stores,    setStores]    = useState(null);
-  const [rotas,     setRotas]     = useState([]);
-  const [rotaAtiva, setRotaAtiva] = useState(null);
-  const [historico, setHistorico] = useState({});
-  const [erro,      setErro]      = useState(null);
-  const [aba,       setAba]       = useState("hoje");
-  const [search,    setSearch]    = useState("");
-  const [filter,    setFilter]    = useState("todos");
-  const [sort,      setSort]      = useState("smart");
-  const [expanded,  setExpanded]  = useState(null);
-  const [editing,   setEditing]   = useState(null);
-  const [flash,     setFlash]     = useState(null);
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
+  const [stores,     setStores]     = useState(null);
+  const [rotas,      setRotas]      = useState([]);
+  const [rotaAtiva,  setRotaAtiva]  = useState(null);
+  const [historico,  setHistorico]  = useState({});
+  const [erro,       setErro]       = useState(null);
+  const [aba,        setAba]        = useState("hoje");
+  const [search,     setSearch]     = useState("");
+  const [filter,     setFilter]     = useState("todos");
+  const [sort,       setSort]       = useState("smart");
+  const [expanded,   setExpanded]   = useState(null);
+  const [editing,    setEditing]    = useState(null);
+  const [flash,      setFlash]      = useState(null);
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [saving,     setSaving]     = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
-  const [obs,       setObs]       = useState({});
+  const [obs,        setObs]        = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
-  const [marcObs,   setMarcObs]   = useState("");
+  const [marcObs,    setMarcObs]    = useState("");
+  const [okCollapsed, setOkCollapsed] = useState(true);
 
   const carregar = useCallback(async () => {
     const [pdvs, rts, ativa, vis] = await Promise.all([
@@ -185,10 +190,10 @@ export default function RepView({ onLogout }) {
   useEffect(() => {
     carregar();
     const ch = supabase.channel("rep-changes")
-      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" },      ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" },     ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" },()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" },   ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" },       ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" },      ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" },    ()=>carregar())
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [carregar]);
@@ -198,7 +203,7 @@ export default function RepView({ onLogout }) {
     const rotaFinal = form.rotaId || (aba==="hoje"&&rotaAtiva?rotaAtiva:null);
     const { error } = await supabase.from("pdvs").insert([{
       id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio,
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal,
     }]);
     if (error) setErro(error.message); else setShowAdd(false);
@@ -209,7 +214,7 @@ export default function RepView({ onLogout }) {
     setSaving(true);
     const { error } = await supabase.from("pdvs").update({
       nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId,
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
     }).eq("id", id);
     if (error) setErro(error.message); else setEditing(null);
     setSaving(false);
@@ -261,21 +266,20 @@ export default function RepView({ onLogout }) {
   const totalRota     = pdvsRotaAtiva.length;
   const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
 
+  const pdvsCriticos = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="critica").sort(cepCmp);
+  const pdvsMedios   = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="media").sort(cepCmp);
+  const pdvsOk       = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="ok").sort(cepCmp);
+
   const listaTodos = stores
     .filter(s => {
       const q=search.toLowerCase(), m=!q||s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q)||(s.cep||"").includes(q);
-      if(filter==="prio") return m&&s.prio===1;
       if(filter==="pendentes") return m&&daysSince(s.visita)!==0;
-      if(filter==="hoje") return m&&daysSince(s.visita)===0;
+      if(filter==="hoje")      return m&&daysSince(s.visita)===0;
       return m;
     })
-    .sort((a,b)=>sort==="cep"
-      ?(a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""))
-      :b.prio-a.prio||ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
-
-  const listaHoje = pdvsRotaAtiva
-    .slice()
-    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]||(a.cep||"").localeCompare(b.cep||""));
+    .sort((a,b) => sort==="cep"
+      ? cepCmp(a,b)
+      : URG_ORDER[getUrgencia(a.visita)]-URG_ORDER[getUrgencia(b.visita)] || cepCmp(a,b));
 
   const cardProps = {
     rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel,
@@ -347,6 +351,13 @@ export default function RepView({ onLogout }) {
                     <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
                   </div>
                 )}
+                {totalRota>0&&(
+                  <div style={{ display:"flex", gap:12, marginTop:10, fontSize:11, fontWeight:700 }}>
+                    {pdvsCriticos.length>0 && <span style={{ color:"#fca5a5" }}>{pdvsCriticos.length} urgentes</span>}
+                    {pdvsMedios.length>0   && <span style={{ color:"#fde68a" }}>{pdvsMedios.length} pendentes</span>}
+                    {pdvsOk.length>0       && <span style={{ color:"#86efac" }}>{pdvsOk.length} em dia</span>}
+                  </div>
+                )}
               </div>
 
               {showAdd&&(
@@ -358,13 +369,49 @@ export default function RepView({ onLogout }) {
                 </div>
               )}
 
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {listaHoje.length===0 ? (
-                  <div style={{ textAlign:"center", padding:"3rem 0" }}>
-                    <div style={{ fontSize:13, color:C.gray }}>Nenhum PDV nesta rota ainda.<br/>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para adicionar.</div>
-                  </div>
-                ) : listaHoje.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-              </div>
+              {totalRota===0 ? (
+                <div style={{ textAlign:"center", padding:"3rem 0" }}>
+                  <div style={{ fontSize:13, color:C.gray }}>Nenhum PDV nesta rota ainda.<br/>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para adicionar.</div>
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {/* Seção Urgente */}
+                  {pdvsCriticos.length>0&&(
+                    <div>
+                      <SectionHead icon="🔴" label="Urgente" count={pdvsCriticos.length} color="#991b1b" bg="#fef2f2" />
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {pdvsCriticos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Seção Pendentes */}
+                  {pdvsMedios.length>0&&(
+                    <div>
+                      <SectionHead icon="🟡" label="Pendentes" count={pdvsMedios.length} color="#92400e" bg="#fffbeb" />
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {pdvsMedios.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Seção Em dia — colapsada por padrão */}
+                  {pdvsOk.length>0&&(
+                    <div>
+                      <SectionHead
+                        icon="✅" label="Em dia" count={pdvsOk.length}
+                        color="#166534" bg="#f0fdf4"
+                        collapsible collapsed={okCollapsed} onToggle={()=>setOkCollapsed(v=>!v)}
+                      />
+                      {!okCollapsed&&(
+                        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                          {pdvsOk.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {totalRota>0&&visitadosRota===totalRota&&(
                 <div style={{ marginTop:14, padding:"14px", background:C.greenDim, border:`1px solid #bbf7d0`, borderRadius:12, textAlign:"center" }}>
@@ -387,12 +434,12 @@ export default function RepView({ onLogout }) {
           )}
           <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)} style={{...ipt, marginBottom:10}} />
           <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-            {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pend."],["hoje","Hoje"]].map(([v,l])=>(
+            {[["todos","Todos"],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
               <Btn key={v} variant={filter===v?"yellow":"ghost"} style={{flex:1,padding:"7px 0",fontSize:11}} onClick={()=>setFilter(v)}>{l}</Btn>
             ))}
           </div>
           <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            <Btn variant={sort==="smart"?"blue":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Inteligente</Btn>
+            <Btn variant={sort==="smart"?"blue":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Urgência</Btn>
             <Btn variant={sort==="cep"?"yellow":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>

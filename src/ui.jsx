@@ -50,6 +50,12 @@ export function Btn({ variant="default", style={}, ...props }) {
 export const TODAY = new Date().toISOString().split("T")[0];
 export const daysSince    = d  => !d ? null : Math.floor((new Date(TODAY) - new Date(d)) / 86400000);
 export const visitStatus  = d  => { if (!d) return "nunca"; const n=daysSince(d); if(n===0) return "ok"; if(n<=14) return "recente"; return "atrasado"; };
+export const getUrgencia  = visita => { if (!visita) return "critica"; const d=daysSince(visita); return d>=30?"critica":d>=15?"media":"ok"; };
+export const URGENCIA = {
+  critica: { label:"URGENTE",  barColor:"#ef4444", badgeBg:"#fef2f2", badgeText:"#991b1b" },
+  media:   { label:"PENDENTE", barColor:"#f5c800", badgeBg:"#fffbeb", badgeText:"#92400e" },
+  ok:      { label:"EM DIA",   barColor:"#16a34a", badgeBg:"#f0fdf4", badgeText:"#166534" },
+};
 export const fmtDate      = d  => !d ? null : new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
 export const fmtTime      = ts => !ts ? "" : new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 export const fmtCep       = v  => { const d=v.replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
@@ -96,14 +102,9 @@ export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
         {errors.end&&<p style={{fontSize:11,color:C.red,margin:"4px 0 0"}}>Endereço obrigatório</p>}
       </div>
       <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-        <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={sel}>
-          {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
-        </select>
-        <Btn variant={form.prio===1?"yellow":"ghost"} style={{padding:"11px 0"}} onClick={()=>set("prio",form.prio===1?0:1)}>
-          {form.prio===1?"⭐ Prior.":"☆ Prior."}
-        </Btn>
-      </div>
+      <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={sel}>
+        {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
+      </select>
       <select value={form.rotaId||""} onChange={e=>set("rotaId",e.target.value||null)} style={sel}>
         <option value="">Sem rota</option>
         {rotas.map(r=><option key={r.id} value={r.id}>📍 {r.nome}</option>)}
