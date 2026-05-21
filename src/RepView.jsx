@@ -2,38 +2,43 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, iptErr, Btn, FormPDV, TODAY, daysSince, visitStatus, fmtDate, fmtCep, fromDB, TIPO_LABEL, TIPOS, STATUS, ORDER } from "./ui";
 
+const FONT = "'Poppins', sans-serif";
+
+function Tag({ children, bg="#f5f6fa", color="#6b7280" }) {
+  return <span style={{ fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:99, background:bg, color, whiteSpace:"nowrap" }}>{children}</span>;
+}
+
 function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving, marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
-  const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita?daysSince(s.visita):null;
+  const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita ? daysSince(s.visita) : null;
   const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id, isOk=vs==="ok";
   const isMarcando = marcandoId===s.id;
-  const obsVal = obs[s.id]!==undefined?obs[s.id]:(s.obs||"");
-  const cepFmt = s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):null;
+  const obsVal = obs[s.id]!==undefined ? obs[s.id] : (s.obs||"");
+  const cepFmt = s.cep ? s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):"") : null;
   const rota = rotas.find(r=>r.id===s.rotaId);
   const hist = historico[s.id]||[];
 
   return (
-    <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${s.prio===1?C.yellow:C.border}`, borderRadius:12, overflow:"hidden" }}>
-      <div style={{ padding:"13px 14px 0" }}>
+    <div style={{
+      background:C.white, borderRadius:16,
+      border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.color}`,
+      overflow:"hidden",
+    }}>
+      <div style={{ padding:"14px 14px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-              <div style={{ width:7, height:7, borderRadius:"50%", background:cfg.dot, flexShrink:0 }} />
-              <span style={{ fontSize:15, fontWeight:600, color:C.white, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</span>
-            </div>
-            <p style={{ margin:"0 0 5px", fontSize:12, color:C.gray, paddingLeft:14 }}>
-              {s.end}{cepFmt?<span style={{color:C.grayDim}}> · {cepFmt}</span>:""}
-            </p>
-            <div style={{ display:"flex", gap:5, flexWrap:"wrap", paddingLeft:14 }}>
-              <span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:C.surface2, color:C.gray }}>{TIPO_LABEL[s.tipo]}</span>
-              {rota&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#f5c80022", color:C.yellow }}>📍 {rota.nome}</span>}
-              {s.prio===1&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#f5c80022", color:C.yellow }}>Prioritário</span>}
-              {s.vendeu&&<span style={{ fontSize:11, padding:"2px 7px", borderRadius:99, background:"#22c55e22", color:C.green }}>Vende Dot</span>}
-            </div>
+            <div style={{ fontSize:15, fontWeight:600, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</div>
+            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{s.end}{cepFmt ? ` · ${cepFmt}` : ""}</div>
           </div>
-          <div style={{ textAlign:"right", flexShrink:0 }}>
-            <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:cfg.color, marginBottom:2 }}>{cfg.label}</div>
-            <div style={{ fontSize:11, color:C.gray, fontFamily:"monospace" }}>{isOk?fmtDate(s.visita):days!==null?`${days}d atrás`:"—"}</div>
-          </div>
+          <span style={{
+            fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99, flexShrink:0,
+            background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.04em",
+          }}>{cfg.label}</span>
+        </div>
+        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, marginBottom:2 }}>
+          <Tag>{TIPO_LABEL[s.tipo]}</Tag>
+          {rota   && <Tag bg="#eff6ff" color={C.blue}>📍 {rota.nome}</Tag>}
+          {s.prio===1 && <Tag bg={C.yellowDim} color="#92400e">⭐ Prior.</Tag>}
+          {s.vendeu   && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
         </div>
       </div>
 
@@ -50,10 +55,10 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         </div>
       )}
 
-      <div style={{ display:"flex", gap:6, padding:"10px 14px" }}>
+      <div style={{ display:"flex", gap:7, padding:"10px 14px" }}>
         {isMarcando&&!isOk ? (
           <>
-            <Btn variant="green" style={{flex:1,padding:"11px 0",fontSize:13}} onClick={()=>marcar(s.id, marcObs)}>
+            <Btn variant="blue" style={{flex:1,padding:"11px 0",borderRadius:10,fontSize:13}} onClick={()=>marcar(s.id, marcObs)}>
               ✓ Confirmar visita
             </Btn>
             <Btn variant="ghost" style={{padding:"11px 12px",fontSize:13}} onClick={()=>{setMarcandoId(null);setMarcObs("");}}>
@@ -63,11 +68,11 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         ) : (
           <>
             <Btn
-              variant={isFlash||isOk?"green":"yellow"}
-              style={{flex:1,padding:"11px 0",cursor:isOk?"default":"pointer",opacity:isOk?0.65:1}}
+              variant={isFlash||isOk ? "green" : "yellow"}
+              style={{flex:1, padding:"11px 0", borderRadius:10, fontWeight:700, cursor:isOk?"default":"pointer", opacity:isOk?0.7:1}}
               onClick={()=>!isOk&&setMarcandoId(s.id)}
             >
-              {isFlash?"✓ Registrado!":isOk?"✓ Visitado hoje":"Marcar visita"}
+              {isFlash ? "✓ Registrado!" : isOk ? "✓ Visitado hoje" : "Marcar visita"}
             </Btn>
             <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
               {s.vendeu?"Dot ✓":"+ Dot"}
@@ -83,44 +88,43 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         <div style={{ padding:"12px 14px 14px", borderTop:`1px solid ${C.border}` }}>
           {isEdit ? (
             <div>
-              <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:12 }}>EDITAR PDV</div>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:12 }}>EDITAR PDV</div>
               <FormPDV
                 initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId}}
                 onSave={(form)=>editar(s.id,form)}
                 onCancel={()=>setEditing(null)}
-                saving={saving}
-                rotas={rotas}
+                saving={saving} rotas={rotas}
               />
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               <div>
-                <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", marginBottom:5 }}>OBSERVAÇÕES DO PDV</div>
+                <div style={{ fontSize:10, color:C.gray, fontWeight:600, letterSpacing:"0.07em", marginBottom:6 }}>OBSERVAÇÕES DO PDV</div>
                 <textarea
                   rows={2} value={obsVal}
                   placeholder="Anotação sobre o PDV…"
                   onChange={e=>setObs(p=>({...p,[s.id]:e.target.value}))}
                   onBlur={()=>saveObs(s.id)}
-                  style={{...ipt,resize:"none",fontSize:13}}
+                  style={{...ipt, resize:"none", fontSize:13}}
                 />
               </div>
               {hist.length>0&&(
                 <div>
-                  <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.08em", marginBottom:6 }}>HISTÓRICO DE VISITAS</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  <div style={{ fontSize:10, color:C.gray, fontWeight:600, letterSpacing:"0.07em", marginBottom:7 }}>HISTÓRICO DE VISITAS</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                     {hist.map(v=>(
-                      <div key={v.id} style={{ fontSize:12, padding:"8px 10px", background:C.surface2, borderRadius:7, display:"flex", gap:8, alignItems:"flex-start" }}>
-                        <span style={{ color:C.yellow, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
+                      <div key={v.id} style={{ fontSize:12, padding:"8px 11px", background:C.grayDim, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
+                        <span style={{ color:C.blue, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
                         {v.obs
-                          ? <span style={{ color:C.gray, lineHeight:1.4 }}>{v.obs}</span>
-                          : <span style={{ color:C.grayDim, fontStyle:"italic" }}>sem obs.</span>
+                          ? <span style={{ color:C.muted, lineHeight:1.4 }}>{v.obs}</span>
+                          : <span style={{ color:C.gray, fontStyle:"italic" }}>sem obs.</span>
                         }
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-              <div style={{ display:"flex", gap:6 }}>
+              <div style={{ display:"flex", gap:7 }}>
                 <Btn variant="default" style={{flex:1,padding:"9px 0",fontSize:12}} onClick={()=>setEditing(s.id)}>✏️ Editar dados</Btn>
                 {isDel ? (
                   <>
@@ -140,24 +144,24 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
 }
 
 export default function RepView({ onLogout }) {
-  const [stores, setStores]       = useState(null);
-  const [rotas, setRotas]         = useState([]);
+  const [stores,    setStores]    = useState(null);
+  const [rotas,     setRotas]     = useState([]);
   const [rotaAtiva, setRotaAtiva] = useState(null);
   const [historico, setHistorico] = useState({});
-  const [erro, setErro]           = useState(null);
-  const [aba, setAba]             = useState("hoje"); // hoje | todos | rotas
-  const [search, setSearch]       = useState("");
-  const [filter, setFilter]       = useState("todos");
-  const [sort, setSort]           = useState("smart");
-  const [expanded, setExpanded]   = useState(null);
-  const [editing, setEditing]     = useState(null);
-  const [flash, setFlash]         = useState(null);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [saving, setSaving]       = useState(false);
+  const [erro,      setErro]      = useState(null);
+  const [aba,       setAba]       = useState("hoje");
+  const [search,    setSearch]    = useState("");
+  const [filter,    setFilter]    = useState("todos");
+  const [sort,      setSort]      = useState("smart");
+  const [expanded,  setExpanded]  = useState(null);
+  const [editing,   setEditing]   = useState(null);
+  const [flash,     setFlash]     = useState(null);
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
-  const [obs, setObs]             = useState({});
+  const [obs,       setObs]       = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
-  const [marcObs, setMarcObs]     = useState("");
+  const [marcObs,   setMarcObs]   = useState("");
 
   const carregar = useCallback(async () => {
     const [pdvs, rts, ativa, vis] = await Promise.all([
@@ -181,10 +185,10 @@ export default function RepView({ onLogout }) {
   useEffect(() => {
     carregar();
     const ch = supabase.channel("rep-changes")
-      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" }, ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" }, ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" }, ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" },      ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" },     ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" },()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" },   ()=>carregar())
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [carregar]);
@@ -217,14 +221,12 @@ export default function RepView({ onLogout }) {
   }, []);
 
   const marcar = useCallback(async (id, obsText) => {
-    setMarcandoId(null);
-    setMarcObs("");
+    setMarcandoId(null); setMarcObs("");
     await Promise.all([
       atualizar(id, { ultima_visita:TODAY }),
       supabase.from("visitas").insert([{ id:Date.now().toString(), pdv_id:id, data:TODAY, obs:obsText||"" }]),
     ]);
-    setFlash(id);
-    setTimeout(()=>setFlash(null), 2000);
+    setFlash(id); setTimeout(()=>setFlash(null), 2000);
   }, [atualizar]);
 
   const saveObs = useCallback(async (id) => {
@@ -240,24 +242,23 @@ export default function RepView({ onLogout }) {
   }, []);
 
   if (!stores) return (
-    <div style={{ background:C.bg, color:C.gray, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, fontFamily:"system-ui" }}>
-      <div style={{ width:32, height:32, border:`3px solid ${C.border}`, borderTopColor:C.yellow, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
-      <span style={{ fontSize:13 }}>Conectando…</span>
+    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, fontFamily:FONT }}>
+      <div style={{ width:34, height:34, border:`3px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if (erro) return (
-    <div style={{ background:C.bg, color:C.red, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center", fontFamily:"system-ui" }}>
+    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center", fontFamily:FONT }}>
       <div style={{ fontSize:32 }}>⚠️</div>
-      <div style={{ fontSize:14, lineHeight:1.6 }}>{erro}</div>
-      <Btn variant="ghost" style={{ padding:"10px 20px" }} onClick={()=>{ setErro(null); carregar(); }}>Tentar novamente</Btn>
+      <div style={{ fontSize:14, lineHeight:1.6, color:C.red }}>{erro}</div>
+      <Btn variant="default" style={{ padding:"10px 20px" }} onClick={()=>{ setErro(null); carregar(); }}>Tentar novamente</Btn>
     </div>
   );
 
-  const rotaAtivaObj = rotas.find(r=>r.id===rotaAtiva);
+  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
   const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
-  const totalRota = pdvsRotaAtiva.length;
+  const totalRota     = pdvsRotaAtiva.length;
   const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
 
   const listaTodos = stores
@@ -274,7 +275,7 @@ export default function RepView({ onLogout }) {
 
   const listaHoje = pdvsRotaAtiva
     .slice()
-    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)] || (a.cep||"").localeCompare(b.cep||""));
+    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]||(a.cep||"").localeCompare(b.cep||""));
 
   const cardProps = {
     rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel,
@@ -282,156 +283,159 @@ export default function RepView({ onLogout }) {
     marcandoId, setMarcandoId, marcObs, setMarcObs, historico,
   };
 
-  return (
-    <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, color:C.white, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"2rem" }}>
+  const NAV_TABS = [
+    ["hoje",  "ti-target",      "Hoje" ],
+    ["todos", "ti-layout-list", "Todos"],
+    ["rotas", "ti-map-pin",     "Rotas"],
+  ];
 
-      <div style={{ padding:"1.5rem 1rem 0", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:C.yellow }} />
-              <span style={{ fontSize:11, color:C.yellow, letterSpacing:"0.12em", textTransform:"uppercase", fontWeight:700 }}>Dot Energy</span>
+  return (
+    <div style={{ fontFamily:FONT, background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:90 }}>
+
+      {/* HEADER */}
+      <div style={{ background:C.white, borderBottom:`1px solid #f5f6fa`, padding:"18px 20px 14px", position:"sticky", top:0, zIndex:10 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <span style={{ fontSize:18 }}>⚡</span>
             </div>
-            <h1 style={{ margin:0, fontSize:26, fontWeight:700, letterSpacing:"-0.02em", color:C.white }}>Rota PDV</h1>
+            <div>
+              <div style={{ fontSize:10, color:C.blue, fontWeight:700, letterSpacing:"0.1em" }}>DOT ENERGY</div>
+              <div style={{ fontSize:17, fontWeight:700, color:C.text, lineHeight:1.1 }}>Rota PDV</div>
+            </div>
           </div>
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:7, alignItems:"center" }}>
             {aba!=="rotas"&&(
-              <Btn variant={showAdd?"danger":"yellow"} style={{padding:"9px 16px"}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
-                {showAdd?"✕ Cancelar":"+ Novo PDV"}
+              <Btn variant={showAdd?"danger":"yellow"} style={{padding:"8px 14px",fontSize:12}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
+                {showAdd?"✕":"+ PDV"}
               </Btn>
             )}
-            <Btn variant="ghost" style={{padding:"9px 12px",fontSize:12}} onClick={onLogout}>Sair</Btn>
+            <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", padding:6 }}>
+              <i className="ti ti-logout" style={{ fontSize:20, color:C.muted }} />
+            </button>
           </div>
-        </div>
-        <div style={{ display:"flex", gap:4, marginTop:8 }}>
-          {[["hoje","🎯 Hoje"],["todos","📋 Todos"],["rotas","📍 Rotas"]].map(([v,l])=>(
-            <button key={v} onClick={()=>{setAba(v);setShowAdd(false);}} style={{
-              flex:1, padding:"11px 0", fontSize:13, fontWeight:600, cursor:"pointer",
-              background:"transparent", border:"none", fontFamily:"inherit",
-              color:aba===v?C.yellow:C.gray,
-              borderBottom:aba===v?`2px solid ${C.yellow}`:"2px solid transparent",
-              marginBottom:-1,
-            }}>{l}</button>
-          ))}
         </div>
       </div>
 
+      {/* ── ABA HOJE ── */}
       {aba==="hoje"&&(
-        <>
+        <div style={{ padding:"16px 16px 0" }}>
           {!rotaAtiva ? (
-            <div style={{ padding:"2.5rem 1.25rem", textAlign:"center" }}>
-              <div style={{ fontSize:44, marginBottom:14 }}>🎯</div>
-              <div style={{ fontSize:17, fontWeight:700, color:C.white, marginBottom:8 }}>Nenhuma rota ativa</div>
-              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>
-                Aguarde o admin ativar a rota do dia.
+            <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
+              <div style={{ width:64, height:64, borderRadius:20, background:C.blueDim, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
+                <i className="ti ti-target" style={{ fontSize:30, color:C.blue }} />
               </div>
+              <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Nenhuma rota ativa</div>
+              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>Aguarde o admin ativar a rota do dia.</div>
             </div>
           ) : (
             <>
-              <div style={{ margin:"1rem", padding:"14px 16px", background:`linear-gradient(135deg, #f5c80018, #f5c80008)`, border:`1px solid #f5c80055`, borderRadius:12 }}>
+              {/* Banner rota ativa */}
+              <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
-                    <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:3 }}>ROTA ATIVA</div>
-                    <div style={{ fontSize:18, fontWeight:700, color:C.white }}>📍 {rotaAtivaObj?.nome||"—"}</div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA</div>
+                    <div style={{ fontSize:19, fontWeight:700, color:"#ffffff" }}>📍 {rotaAtivaObj?.nome||"—"}</div>
                   </div>
                   <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:22, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?C.green:C.yellow, fontVariantNumeric:"tabular-nums" }}>
-                      {visitadosRota}/{totalRota}
-                    </div>
-                    <div style={{ fontSize:10, color:C.gray, letterSpacing:"0.05em" }}>VISITADOS</div>
+                    <div style={{ fontSize:26, fontWeight:700, color:C.yellow, fontVariantNumeric:"tabular-nums" }}>{visitadosRota}/{totalRota}</div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.06em" }}>VISITADOS</div>
                   </div>
                 </div>
                 {totalRota>0&&(
-                  <div style={{ marginTop:10, height:4, background:C.surface2, borderRadius:99, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:C.yellow, transition:"width 0.4s" }} />
+                  <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
                   </div>
                 )}
               </div>
+
               {showAdd&&(
-                <div style={{ margin:"0 1rem 1rem", padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
-                  <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PDV {rotaAtivaObj?`· ROTA ${rotaAtivaObj.nome.toUpperCase()}`:""}</div>
+                <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, padding:"18px", marginBottom:16 }}>
+                  <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:14 }}>
+                    NOVO PDV{rotaAtivaObj?` · ${rotaAtivaObj.nome.toUpperCase()}`:""}
+                  </div>
                   <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:rotaAtiva }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
                 </div>
               )}
-              <div style={{ padding:"0 1rem", display:"flex", flexDirection:"column", gap:8 }}>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {listaHoje.length===0 ? (
-                  <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
-                    <div style={{ fontSize:36, marginBottom:10 }}>📍</div>
-                    <div style={{ fontSize:14, color:C.gray, lineHeight:1.6 }}>Nenhum PDV nesta rota ainda.<br/>Toque em <span style={{color:C.yellow,fontWeight:600}}>+ Novo PDV</span> para adicionar.</div>
+                  <div style={{ textAlign:"center", padding:"3rem 0" }}>
+                    <div style={{ fontSize:13, color:C.gray }}>Nenhum PDV nesta rota ainda.<br/>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para adicionar.</div>
                   </div>
                 ) : listaHoje.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
               </div>
+
               {totalRota>0&&visitadosRota===totalRota&&(
-                <div style={{ margin:"1.25rem 1rem 0", padding:"14px", background:`${C.green}15`, border:`1px solid ${C.green}55`, borderRadius:10, textAlign:"center" }}>
-                  <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>🎉 ROTA COMPLETA — todos os PDVs visitados!</span>
+                <div style={{ marginTop:14, padding:"14px", background:C.greenDim, border:`1px solid #bbf7d0`, borderRadius:12, textAlign:"center" }}>
+                  <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>🎉 ROTA COMPLETA — todos visitados!</span>
                 </div>
               )}
             </>
           )}
-        </>
+        </div>
       )}
 
+      {/* ── ABA TODOS ── */}
       {aba==="todos"&&(
-        <>
+        <div style={{ padding:"16px 16px 0" }}>
           {showAdd&&(
-            <div style={{ margin:"1rem", padding:"1.25rem", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
-              <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>NOVO PONTO DE VENDA</div>
+            <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, padding:"18px", marginBottom:16 }}>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:14 }}>NOVO PONTO DE VENDA</div>
               <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:null }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
-          <div style={{ padding:"1rem 1rem 0.75rem" }}>
-            <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)} style={{...ipt,marginBottom:10}} />
-            <div style={{ display:"flex", gap:6, marginBottom:8 }}>
-              {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
-                <Btn key={v} variant={filter===v?"yellow":"ghost"} style={{flex:1,padding:"7px 0",fontSize:12}} onClick={()=>setFilter(v)}>{l}</Btn>
-              ))}
-            </div>
-            <div style={{ display:"flex", gap:6 }}>
-              <Btn variant={sort==="smart"?"default":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Inteligente</Btn>
-              <Btn variant={sort==="cep"?"yellow":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
-            </div>
+          <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)} style={{...ipt, marginBottom:10}} />
+          <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+            {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pend."],["hoje","Hoje"]].map(([v,l])=>(
+              <Btn key={v} variant={filter===v?"yellow":"ghost"} style={{flex:1,padding:"7px 0",fontSize:11}} onClick={()=>setFilter(v)}>{l}</Btn>
+            ))}
           </div>
-          <div style={{ padding:"0 1rem", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+            <Btn variant={sort==="smart"?"blue":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Inteligente</Btn>
+            <Btn variant={sort==="cep"?"yellow":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {listaTodos.length===0&&stores.length===0&&(
-              <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
-                <div style={{ fontSize:44, marginBottom:12 }}>📍</div>
-                <div style={{ fontSize:17, fontWeight:700, color:C.white, marginBottom:8 }}>Nenhum PDV cadastrado</div>
-                <div style={{ fontSize:13, color:C.gray, lineHeight:1.7 }}>Toque em <span style={{color:C.yellow,fontWeight:600}}>+ Novo PDV</span> para começar.</div>
+              <div style={{ textAlign:"center", padding:"4rem 0" }}>
+                <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Nenhum PDV cadastrado</div>
+                <div style={{ fontSize:13, color:C.gray }}>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para começar.</div>
               </div>
             )}
             {listaTodos.length===0&&stores.length>0&&<div style={{ textAlign:"center", padding:"2rem 0", color:C.gray, fontSize:14 }}>Nenhum PDV encontrado.</div>}
             {listaTodos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
           </div>
-        </>
+        </div>
       )}
 
+      {/* ── ABA ROTAS (read-only) ── */}
       {aba==="rotas"&&(
-        <div style={{ padding:"1rem" }}>
+        <div style={{ padding:"16px 16px 0" }}>
           {rotaAtivaObj&&(
-            <div style={{ padding:"14px 16px", background:`linear-gradient(135deg, #f5c80018, #f5c80008)`, border:`1px solid #f5c80055`, borderRadius:12, marginBottom:14 }}>
-              <div style={{ fontSize:10, color:C.yellow, letterSpacing:"0.1em", fontWeight:700, marginBottom:3 }}>ROTA ATIVA HOJE</div>
-              <div style={{ fontSize:18, fontWeight:700, color:C.white }}>📍 {rotaAtivaObj.nome}</div>
-              <div style={{ fontSize:12, color:C.gray, marginTop:4 }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados hoje</div>
+            <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA HOJE</div>
+              <div style={{ fontSize:19, fontWeight:700, color:"#fff", marginBottom:6 }}>📍 {rotaAtivaObj.nome}</div>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados</div>
               {pdvsRotaAtiva.length>0&&(
-                <div style={{ marginTop:10, height:4, background:C.surface2, borderRadius:99, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:C.yellow, transition:"width 0.4s" }} />
+                <div style={{ marginTop:12, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
                 </div>
               )}
             </div>
           )}
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {rotas.length===0 ? (
-              <div style={{ textAlign:"center", padding:"3rem 1rem", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
+              <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
             ) : rotas.map(r=>{
               const qtd = stores.filter(s=>s.rotaId===r.id).length;
               const isActive = rotaAtiva===r.id;
               return (
-                <div key={r.id} style={{ background:C.surface, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:12, padding:"14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
-                    <div style={{ fontSize:16, fontWeight:600, color:C.white, marginBottom:2 }}>📍 {r.nome}</div>
-                    <div style={{ fontSize:12, color:C.gray }}>{qtd} PDV{qtd!==1?"s":""}</div>
+                    <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
+                    <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
                   </div>
-                  {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 8px", borderRadius:99, background:`${C.yellow}22`, color:C.yellow, letterSpacing:"0.08em" }}>ATIVA HOJE</span>}
+                  {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>ATIVA HOJE</span>}
                 </div>
               );
             })}
@@ -439,6 +443,27 @@ export default function RepView({ onLogout }) {
         </div>
       )}
 
+      {/* BOTTOM NAV */}
+      <nav style={{
+        position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
+        width:"min(440px, 100%)", padding:"8px 16px 24px",
+        background:`linear-gradient(transparent, ${C.bg} 35%)`, zIndex:50,
+      }}>
+        <div style={{ background:C.nav, borderRadius:99, padding:"5px", display:"flex" }}>
+          {NAV_TABS.map(([v, icon, label])=>(
+            <button key={v} onClick={()=>{setAba(v);setShowAdd(false);}} style={{
+              flex:1, padding:"10px 6px", border:"none", cursor:"pointer",
+              borderRadius:94, fontFamily:FONT,
+              background: aba===v ? C.white : "transparent",
+              display:"flex", flexDirection:"column", alignItems:"center", gap:3,
+              transition:"background 0.15s",
+            }}>
+              <i className={`ti ${icon}`} style={{ fontSize:19, color: aba===v ? C.text : "#6b7280" }} />
+              <span style={{ fontSize:10, fontWeight:600, color: aba===v ? C.text : "#6b7280" }}>{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }

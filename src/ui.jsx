@@ -1,37 +1,58 @@
 import { useState } from "react";
 
 export const C = {
-  bg:"#0e0e0e", surface:"#1a1a1a", surface2:"#222", border:"#2e2e2e",
-  yellow:"#f5c800", green:"#22c55e", amber:"#f59e0b", red:"#ef4444",
-  white:"#f0f0f0", gray:"#777", grayDim:"#3a3a3a",
+  bg:        "#f8f9fc",
+  white:     "#ffffff",
+  surface:   "#ffffff",
+  surface2:  "#f8f9fc",
+  border:    "#f0f1f6",
+  blue:      "#1b3a8c",
+  blueDim:   "#eff6ff",
+  yellow:    "#f5c800",
+  yellowDim: "#fffbeb",
+  green:     "#16a34a",
+  greenDim:  "#f0fdf4",
+  amber:     "#d97706",
+  amberDim:  "#fffbeb",
+  red:       "#ef4444",
+  redDim:    "#fef2f2",
+  text:      "#111827",
+  muted:     "#6b7280",
+  gray:      "#b0b7c3",
+  grayDim:   "#f5f6fa",
+  nav:       "#1a1f36",
 };
 
 export const ipt = {
   width:"100%", boxSizing:"border-box",
-  background:"#222", border:"1px solid #2e2e2e", borderRadius:8,
-  padding:"11px 13px", fontSize:14, color:"#f0f0f0",
-  fontFamily:"inherit", outline:"none",
+  background:"#f8f9fc", border:"1px solid #f0f1f6", borderRadius:10,
+  padding:"12px 14px", fontSize:14, color:"#111827",
+  fontFamily:"'Poppins', sans-serif", outline:"none",
 };
-export const iptErr = { ...ipt, border:"1px solid #ef444488" };
+export const iptErr = { ...ipt, border:"1px solid #fca5a5" };
 
 export function Btn({ variant="default", style={}, ...props }) {
-  const base = { cursor:"pointer", borderRadius:8, fontSize:13, fontWeight:600, letterSpacing:"0.03em", border:"none", fontFamily:"inherit" };
+  const base = {
+    cursor:"pointer", borderRadius:10, fontSize:13, fontWeight:600,
+    letterSpacing:"0.01em", fontFamily:"'Poppins', sans-serif",
+  };
   const variants = {
-    yellow:{ background:"#f5c800", color:"#000" },
-    ghost:{ background:"transparent", border:"1px solid #2e2e2e", color:"#777" },
-    green:{ background:"#14532d", color:"#22c55e", border:"1px solid #22c55e33" },
-    danger:{ background:"transparent", border:"1px solid #ef444455", color:"#ef4444" },
-    default:{ background:"#222", border:"1px solid #2e2e2e", color:"#f0f0f0" },
+    yellow:  { background:"#f5c800", color:"#111827", border:"none" },
+    ghost:   { background:"#f5f6fa", color:"#6b7280", border:"none" },
+    green:   { background:"#f0fdf4", color:"#16a34a", border:"1px solid #bbf7d0" },
+    danger:  { background:"#fef2f2", color:"#ef4444", border:"1px solid #fecaca" },
+    default: { background:"#f5f6fa", color:"#374151", border:"1px solid #f0f1f6" },
+    blue:    { background:"#1b3a8c", color:"#ffffff", border:"none" },
   };
   return <button style={{ ...base, ...variants[variant], ...style }} {...props} />;
 }
 
 export const TODAY = new Date().toISOString().split("T")[0];
-export const daysSince = d => !d ? null : Math.floor((new Date(TODAY) - new Date(d)) / 86400000);
-export const visitStatus = d => { if (!d) return "nunca"; const n = daysSince(d); if (n===0) return "ok"; if (n<=14) return "recente"; return "atrasado"; };
-export const fmtDate = d => !d ? null : new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
-export const fmtTime = ts => !ts ? "" : new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-export const fmtCep = v => { const d=v.replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
+export const daysSince    = d  => !d ? null : Math.floor((new Date(TODAY) - new Date(d)) / 86400000);
+export const visitStatus  = d  => { if (!d) return "nunca"; const n=daysSince(d); if(n===0) return "ok"; if(n<=14) return "recente"; return "atrasado"; };
+export const fmtDate      = d  => !d ? null : new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+export const fmtTime      = ts => !ts ? "" : new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+export const fmtCep       = v  => { const d=v.replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
 
 export const fromDB = r => ({
   id:r.id, nome:r.nome, end:r.endereco||"", cep:r.cep||"", tipo:r.tipo||"facu",
@@ -43,12 +64,11 @@ export const TIPO_LABEL = { facu:"Faculdade", corp:"Corporativo", armazem:"Armaz
 export const TIPOS = Object.keys(TIPO_LABEL);
 
 export const STATUS = {
-  ok:{ label:"HOJE", color:"#22c55e", dot:"#22c55e" },
-  recente:{ label:"RECENTE", color:"#f59e0b", dot:"#f59e0b" },
-  atrasado:{ label:"ATRASADO", color:"#ef4444", dot:"#ef4444" },
-  nunca:{ label:"SEM VISITA", color:"#3a3a3a", dot:"#3a3a3a" },
+  ok:       { label:"HOJE",       color:"#16a34a", dot:"#16a34a", badgeBg:"#f0fdf4", badgeText:"#166534" },
+  recente:  { label:"RECENTE",    color:"#f5c800", dot:"#f5c800", badgeBg:"#fffbeb", badgeText:"#92400e" },
+  atrasado: { label:"ATRASADO",   color:"#ef4444", dot:"#ef4444", badgeBg:"#fef2f2", badgeText:"#991b1b" },
+  nunca:    { label:"SEM VISITA", color:"#d1d5db", dot:"#d1d5db", badgeBg:"#f3f4f6", badgeText:"#9ca3af" },
 };
-
 export const ORDER = { nunca:0, atrasado:1, recente:2, ok:3 };
 
 export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
@@ -62,38 +82,41 @@ export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
     setErrors(e); return Object.keys(e).length === 0;
   };
   const submit = () => { if (validar()) onSave(form); };
+
+  const sel = { ...ipt, padding:"11px 12px", appearance:"none", WebkitAppearance:"none" };
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div>
         <input placeholder="Nome do estabelecimento *" value={form.nome} onChange={e=>set("nome",e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} style={errors.nome?iptErr:ipt} autoFocus />
-        {errors.nome&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Nome obrigatório</p>}
+        {errors.nome&&<p style={{fontSize:11,color:C.red,margin:"4px 0 0"}}>Nome obrigatório</p>}
       </div>
       <div>
         <input placeholder="Endereço *" value={form.end} onChange={e=>set("end",e.target.value)} style={errors.end?iptErr:ipt} />
-        {errors.end&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
+        {errors.end&&<p style={{fontSize:11,color:C.red,margin:"4px 0 0"}}>Endereço obrigatório</p>}
       </div>
       <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
-        <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={{...ipt,padding:"11px 10px"}}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={sel}>
           {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
         </select>
         <Btn variant={form.prio===1?"yellow":"ghost"} style={{padding:"11px 0"}} onClick={()=>set("prio",form.prio===1?0:1)}>
           {form.prio===1?"⭐ Prior.":"☆ Prior."}
         </Btn>
       </div>
-      <select value={form.rotaId||""} onChange={e=>set("rotaId",e.target.value||null)} style={{...ipt,padding:"11px 10px"}}>
+      <select value={form.rotaId||""} onChange={e=>set("rotaId",e.target.value||null)} style={sel}>
         <option value="">Sem rota</option>
         {rotas.map(r=><option key={r.id} value={r.id}>📍 {r.nome}</option>)}
       </select>
-      <div style={{ display:"flex", gap:8 }}>
+      <div style={{ display:"flex", gap:8, marginTop:2 }}>
         <Btn
           variant={form.nome.trim()&&form.end.trim()&&!saving?"yellow":"ghost"}
-          style={{flex:1,padding:"12px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.4}}
+          style={{flex:1,padding:"13px 0",fontSize:14,opacity:form.nome.trim()&&form.end.trim()?1:0.45}}
           onClick={submit}
         >
           {saving?"Salvando…":"Salvar"}
         </Btn>
-        {onCancel&&<Btn variant="ghost" style={{padding:"12px 14px"}} onClick={onCancel}>Cancelar</Btn>}
+        {onCancel&&<Btn variant="ghost" style={{padding:"13px 16px"}} onClick={onCancel}>Cancelar</Btn>}
       </div>
     </div>
   );
