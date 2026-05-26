@@ -150,7 +150,7 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
 export default function RepView({ onLogout }) {
   const [stores,     setStores]     = useState(null);
   const [rotas,      setRotas]      = useState([]);
-  const [rotaAtiva,  setRotaAtiva]  = useState(null);
+  const [agendaHoje, setAgendaHoje] = useState([]);
   const [historico,  setHistorico]  = useState({});
   const [erro,       setErro]       = useState(null);
   const [aba,        setAba]        = useState("hoje");
@@ -166,19 +166,19 @@ export default function RepView({ onLogout }) {
   const [obs,        setObs]        = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs,    setMarcObs]    = useState("");
-  const [okCollapsed, setOkCollapsed] = useState(true);
+  const [okCollapsed, setOkCollapsed] = useState({});
 
   const carregar = useCallback(async () => {
-    const [pdvs, rts, ativa, vis] = await Promise.all([
+    const [pdvs, rts, agenda, vis] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
       supabase.from("rotas").select("*").order("nome", { ascending:true }),
-      supabase.from("rota_ativa").select("*").eq("id",1).single(),
+      supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
       supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
     ]);
     if (pdvs.error) { setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setRotas(rts.data||[]);
-    setRotaAtiva(ativa.data?.rota_id||null);
+    setAgendaHoje(agenda.data||[]);
     const hist = {};
     for (const v of (vis.data||[])) {
       if (!hist[v.pdv_id]) hist[v.pdv_id] = [];
@@ -200,8 +200,9 @@ export default function RepView({ onLogout }) {
         else if (eventType==="UPDATE") setRotas(prev => prev.map(r => r.id===n.id ? n : r));
         else if (eventType==="DELETE") setRotas(prev => prev.filter(r => r.id!==o.id));
       })
-      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ({ new:n }) => {
-        setRotaAtiva(n?.rota_id||null);
+      .on("postgres_changes", { event:"*", schema:"public", table:"agenda" }, () => {
+        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true })
+          .then(({ data }) => setAgendaHoje(data||[]));
       })
       .on("postgres_changes", { event:"*", schema:"public", table:"visitas" }, ({ eventType, new:n }) => {
         if (eventType==="INSERT" && n)
@@ -216,7 +217,7 @@ export default function RepView({ onLogout }) {
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
-    const rotaFinal = form.rotaId || (aba==="hoje"&&rotaAtiva?rotaAtiva:null);
+    const rotaFinal = form.rotaId || (aba==="hoje" && agendaHoje.length>0 ? agendaHoje[0].rota_id : null);
     const newId = Date.now().toString();
     const { error } = await supabase.from("pdvs").insert([{
       id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
@@ -233,7 +234,7 @@ export default function RepView({ onLogout }) {
       }]);
     }
     setSaving(false);
-  }, [aba, rotaAtiva]);
+  }, [aba, agendaHoje]);
 
   const editar = useCallback(async (id, form) => {
     setSaving(true);
@@ -305,15 +306,6 @@ export default function RepView({ onLogout }) {
     </div>
   );
 
-  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
-  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
-  const totalRota     = pdvsRotaAtiva.length;
-  const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
-
-  const pdvsCriticos = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="critica").sort(cepCmp);
-  const pdvsMedios   = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="media").sort(cepCmp);
-  const pdvsOk       = pdvsRotaAtiva.filter(s=>getUrgencia(s.visita)==="ok").sort(cepCmp);
-
   const listaTodos = stores
     .filter(s => {
       const q=search.toLowerCase(), m=!q||s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q)||(s.cep||"").includes(q);
@@ -368,100 +360,133 @@ export default function RepView({ onLogout }) {
       {/* ── ABA HOJE ── */}
       {aba==="hoje"&&(
         <div style={{ padding:"16px 16px 0" }}>
-          {!rotaAtiva ? (
+          {agendaHoje.length === 0 ? (
             <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
               <div style={{ width:64, height:64, borderRadius:20, background:C.blueDim, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
-                <i className="ti ti-target" style={{ fontSize:30, color:C.blue }} />
+                <i className="ti ti-calendar-off" style={{ fontSize:30, color:C.blue }} />
               </div>
-              <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Nenhuma rota ativa</div>
-              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>Aguarde o admin ativar a rota do dia.</div>
+              <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Sem rota para hoje</div>
+              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>O admin ainda não definiu a agenda de hoje.</div>
             </div>
           ) : (
             <>
-              {/* Banner rota ativa */}
-              <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA</div>
-                    <div style={{ fontSize:19, fontWeight:700, color:"#ffffff" }}>📍 {rotaAtivaObj?.nome||"—"}</div>
+              {/* Banners de progresso — um por rota */}
+              {agendaHoje.map(item => {
+                const rota = rotas.find(r => r.id === item.rota_id);
+                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
+                const visitados = pdvsRota.filter(s => daysSince(s.visita) === 0).length;
+                const total = pdvsRota.length;
+                const criticos = pdvsRota.filter(s => getUrgencia(s.visita)==="critica").length;
+                const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media").length;
+                const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok").length;
+                return (
+                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:10 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
+                          {agendaHoje.length > 1 ? `ROTA ${item.ordem}` : "ROTA ATIVA"}
+                        </div>
+                        <div style={{ fontSize:19, fontWeight:700, color:"#ffffff" }}>📍 {rota?.nome||"—"}</div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:26, fontWeight:700, color:C.yellow, fontVariantNumeric:"tabular-nums" }}>{visitados}/{total}</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.06em" }}>VISITADOS</div>
+                      </div>
+                    </div>
+                    {total>0&&(
+                      <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                      </div>
+                    )}
+                    {total>0&&(
+                      <div style={{ display:"flex", gap:12, marginTop:10, fontSize:11, fontWeight:700 }}>
+                        {criticos>0 && <span style={{ color:"#fca5a5" }}>{criticos} urgentes</span>}
+                        {medios>0   && <span style={{ color:"#fde68a" }}>{medios} pendentes</span>}
+                        {oks>0      && <span style={{ color:"#86efac" }}>{oks} em dia</span>}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:26, fontWeight:700, color:C.yellow, fontVariantNumeric:"tabular-nums" }}>{visitadosRota}/{totalRota}</div>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.06em" }}>VISITADOS</div>
-                  </div>
-                </div>
-                {totalRota>0&&(
-                  <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
-                  </div>
-                )}
-                {totalRota>0&&(
-                  <div style={{ display:"flex", gap:12, marginTop:10, fontSize:11, fontWeight:700 }}>
-                    {pdvsCriticos.length>0 && <span style={{ color:"#fca5a5" }}>{pdvsCriticos.length} urgentes</span>}
-                    {pdvsMedios.length>0   && <span style={{ color:"#fde68a" }}>{pdvsMedios.length} pendentes</span>}
-                    {pdvsOk.length>0       && <span style={{ color:"#86efac" }}>{pdvsOk.length} em dia</span>}
-                  </div>
-                )}
-              </div>
+                );
+              })}
 
               {showAdd&&(
                 <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, padding:"18px", marginBottom:16 }}>
                   <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:14 }}>
-                    NOVO PDV{rotaAtivaObj?` · ${rotaAtivaObj.nome.toUpperCase()}`:""}
+                    NOVO PDV{agendaHoje[0]&&rotas.find(r=>r.id===agendaHoje[0].rota_id)?` · ${rotas.find(r=>r.id===agendaHoje[0].rota_id).nome.toUpperCase()}`:""}
                   </div>
-                  <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:rotaAtiva }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+                  <FormPDV
+                    initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:agendaHoje[0]?.rota_id||null }}
+                    onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas}
+                  />
                 </div>
               )}
 
-              {totalRota===0 ? (
-                <div style={{ textAlign:"center", padding:"3rem 0" }}>
-                  <div style={{ fontSize:13, color:C.gray }}>Nenhum PDV nesta rota ainda.<br/>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para adicionar.</div>
-                </div>
-              ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {/* Seção Urgente */}
-                  {pdvsCriticos.length>0&&(
-                    <div>
-                      <SectionHead icon="🔴" label="Urgente" count={pdvsCriticos.length} color="#991b1b" bg="#fef2f2" />
-                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                        {pdvsCriticos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-                      </div>
-                    </div>
-                  )}
+              {/* PDVs separados por rota */}
+              {agendaHoje.map(item => {
+                const rota = rotas.find(r => r.id === item.rota_id);
+                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id).sort(cepCmp);
+                const criticos = pdvsRota.filter(s => getUrgencia(s.visita)==="critica");
+                const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media");
+                const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok");
+                const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
+                const isOkColl  = okCollapsed[item.rota_id] !== false;
 
-                  {/* Seção Pendentes */}
-                  {pdvsMedios.length>0&&(
-                    <div>
-                      <SectionHead icon="🟡" label="Pendentes" count={pdvsMedios.length} color="#92400e" bg="#fffbeb" />
-                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                        {pdvsMedios.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-                      </div>
-                    </div>
-                  )}
+                if (pdvsRota.length === 0) return (
+                  <div key={item.id} style={{ textAlign:"center", padding:"1.5rem 0", color:C.gray, fontSize:13, marginBottom:8 }}>
+                    Nenhum PDV na rota <strong>{rota?.nome}</strong>.
+                  </div>
+                );
 
-                  {/* Seção Em dia — colapsada por padrão */}
-                  {pdvsOk.length>0&&(
-                    <div>
-                      <SectionHead
-                        icon="✅" label="Em dia" count={pdvsOk.length}
-                        color="#166534" bg="#f0fdf4"
-                        collapsible collapsed={okCollapsed} onToggle={()=>setOkCollapsed(v=>!v)}
-                      />
-                      {!okCollapsed&&(
-                        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                          {pdvsOk.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                return (
+                  <div key={item.id} style={{ marginBottom:24 }}>
+                    {agendaHoje.length > 1 && (
+                      <div style={{ fontSize:11, fontWeight:700, color:C.blue, letterSpacing:"0.1em", marginBottom:10, paddingLeft:2 }}>
+                        📍 {rota?.nome?.toUpperCase()||"—"}
+                      </div>
+                    )}
+
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      {criticos.length>0&&(
+                        <div>
+                          <SectionHead icon="🔴" label="Urgente" count={criticos.length} color="#991b1b" bg="#fef2f2" />
+                          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                            {criticos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                          </div>
+                        </div>
+                      )}
+                      {medios.length>0&&(
+                        <div>
+                          <SectionHead icon="🟡" label="Pendentes" count={medios.length} color="#92400e" bg="#fffbeb" />
+                          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                            {medios.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                          </div>
+                        </div>
+                      )}
+                      {oks.length>0&&(
+                        <div>
+                          <SectionHead
+                            icon="✅" label="Em dia" count={oks.length}
+                            color="#166534" bg="#f0fdf4"
+                            collapsible collapsed={isOkColl}
+                            onToggle={()=>setOkCollapsed(prev=>({...prev,[item.rota_id]:!isOkColl}))}
+                          />
+                          {!isOkColl&&(
+                            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                              {oks.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
 
-              {totalRota>0&&visitadosRota===totalRota&&(
-                <div style={{ marginTop:14, padding:"14px", background:C.greenDim, border:`1px solid #bbf7d0`, borderRadius:12, textAlign:"center" }}>
-                  <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>🎉 ROTA COMPLETA — todos visitados!</span>
-                </div>
-              )}
+                    {pdvsRota.length>0&&visitados===pdvsRota.length&&(
+                      <div style={{ marginTop:14, padding:"14px", background:C.greenDim, border:`1px solid #bbf7d0`, borderRadius:12, textAlign:"center" }}>
+                        <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>🎉 {rota?.nome} — todos visitados!</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
@@ -499,19 +524,30 @@ export default function RepView({ onLogout }) {
         </div>
       )}
 
-      {/* ── ABA ROTAS (read-only) ── */}
+      {/* ── ABA ROTAS ── */}
       {aba==="rotas"&&(
         <div style={{ padding:"16px 16px 0" }}>
-          {rotaAtivaObj&&(
-            <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA HOJE</div>
-              <div style={{ fontSize:19, fontWeight:700, color:"#fff", marginBottom:6 }}>📍 {rotaAtivaObj.nome}</div>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados</div>
-              {pdvsRotaAtiva.length>0&&(
-                <div style={{ marginTop:12, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
-                </div>
-              )}
+          {agendaHoje.length>0&&(
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
+              {agendaHoje.map(item => {
+                const rota = rotas.find(r => r.id === item.rota_id);
+                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
+                const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
+                return (
+                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px" }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
+                      {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
+                    </div>
+                    <div style={{ fontSize:19, fontWeight:700, color:"#fff", marginBottom:6 }}>📍 {rota?.nome||"—"}</div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{pdvsRota.length} PDVs · {visitados} visitados</div>
+                    {pdvsRota.length>0&&(
+                      <div style={{ marginTop:12, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(visitados/pdvsRota.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -519,14 +555,14 @@ export default function RepView({ onLogout }) {
               <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
             ) : rotas.map(r=>{
               const qtd = stores.filter(s=>s.rotaId===r.id).length;
-              const isActive = rotaAtiva===r.id;
+              const isHoje = agendaHoje.some(a => a.rota_id === r.id);
               return (
-                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
                     <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
                     <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
                   </div>
-                  {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>ATIVA HOJE</span>}
+                  {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
                 </div>
               );
             })}

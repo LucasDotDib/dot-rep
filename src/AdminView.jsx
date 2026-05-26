@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtTime, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
@@ -6,12 +6,18 @@ const FONT = "'Poppins', sans-serif";
 const URG_ORDER = { critica:0, media:1, ok:2 };
 const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
 
+const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+const padZ = n => String(n).padStart(2, "0");
+const toDateStr = (y, m, d) => `${y}-${padZ(m)}-${padZ(d)}`;
+const WEEKDAY = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
 export default function AdminView({ onLogout }) {
   const [aba,       setAba]       = useState("geral");
   const [stores,    setStores]    = useState(null);
   const [visitas,   setVisitas]   = useState([]);
   const [rotas,     setRotas]     = useState([]);
-  const [rotaAtiva, setRotaAtiva] = useState(null);
+  const [agendaHoje, setAgendaHoje] = useState([]);
   const [erro,      setErro]      = useState(null);
 
   const [showAdd,     setShowAdd]     = useState(false);
@@ -26,18 +32,33 @@ export default function AdminView({ onLogout }) {
 
   const [selectedDate, setSelectedDate] = useState(TODAY);
 
+  const now = new Date();
+  const [agendaYear,  setAgendaYear]  = useState(now.getFullYear());
+  const [agendaMonth, setAgendaMonth] = useState(now.getMonth() + 1);
+  const [agendaMes,   setAgendaMes]   = useState([]);
+  const agendaViewRef = useRef({ year: now.getFullYear(), month: now.getMonth() + 1 });
+
   const carregar = useCallback(async () => {
-    const [pdvs, vis, rts, ativa] = await Promise.all([
+    const [pdvs, vis, rts, agenda] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
       supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
       supabase.from("rotas").select("*").order("nome", { ascending:true }),
-      supabase.from("rota_ativa").select("*").eq("id",1).single(),
+      supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
     ]);
     if (pdvs.error) { setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setVisitas(vis.data||[]);
     setRotas(rts.data||[]);
-    setRotaAtiva(ativa.data?.rota_id||null);
+    setAgendaHoje(agenda.data||[]);
+  }, []);
+
+  const carregarAgenda = useCallback(async (year, month) => {
+    const first = toDateStr(year, month, 1);
+    const last  = toDateStr(year, month, daysInMonth(year, month));
+    const { data } = await supabase.from("agenda").select("*")
+      .gte("data", first).lte("data", last)
+      .order("data", { ascending:true }).order("ordem", { ascending:true });
+    setAgendaMes(data||[]);
   }, []);
 
   useEffect(() => {
@@ -56,12 +77,24 @@ export default function AdminView({ onLogout }) {
         else if (eventType==="UPDATE") setRotas(prev => prev.map(r => r.id===n.id ? n : r));
         else if (eventType==="DELETE") setRotas(prev => prev.filter(r => r.id!==o.id));
       })
-      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ({ new:n }) => {
-        setRotaAtiva(n?.rota_id||null);
+      .on("postgres_changes", { event:"*", schema:"public", table:"agenda" }, () => {
+        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true })
+          .then(({ data }) => setAgendaHoje(data||[]));
+        const { year, month } = agendaViewRef.current;
+        const first = toDateStr(year, month, 1);
+        const last  = toDateStr(year, month, daysInMonth(year, month));
+        supabase.from("agenda").select("*").gte("data", first).lte("data", last)
+          .order("data", { ascending:true }).order("ordem", { ascending:true })
+          .then(({ data }) => setAgendaMes(data||[]));
       })
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [carregar]);
+
+  useEffect(() => {
+    agendaViewRef.current = { year: agendaYear, month: agendaMonth };
+    if (aba === "agenda") carregarAgenda(agendaYear, agendaMonth);
+  }, [aba, agendaYear, agendaMonth, carregarAgenda]);
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
@@ -124,21 +157,29 @@ export default function AdminView({ onLogout }) {
 
   const removerRota = useCallback(async (id) => {
     await supabase.from("pdvs").update({ rota_id:null }).eq("rota_id", id);
-    if (rotaAtiva===id) await supabase.from("rota_ativa").update({ rota_id:null }).eq("id", 1);
     const { error } = await supabase.from("rotas").delete().eq("id", id);
     if (error) { setErro(error.message); }
     else {
       setConfirmDelRota(null);
       setRotas(prev => prev.filter(r => r.id!==id));
       setStores(prev => prev.map(s => s.rotaId===id ? {...s, rotaId:null} : s));
-      if (rotaAtiva===id) setRotaAtiva(null);
     }
-  }, [rotaAtiva]);
+  }, []);
 
-  const ativarRota = useCallback(async (id) => {
-    const { error } = await supabase.from("rota_ativa").update({ rota_id:id, ativada_em:new Date().toISOString() }).eq("id", 1);
-    if (error) { setErro(error.message); }
-    else { setRotaAtiva(id); }
+  const adicionarAgendaItem = useCallback(async (data, rotaId, ordem) => {
+    const newId = Date.now().toString();
+    const { error } = await supabase.from("agenda").insert([{ id:newId, data, rota_id:rotaId, ordem }]);
+    if (error) { setErro(error.message); return; }
+    const novo = { id:newId, data, rota_id:rotaId, ordem };
+    setAgendaMes(prev => [...prev, novo].sort((a,b)=>a.data.localeCompare(b.data)||a.ordem-b.ordem));
+    if (data === TODAY) setAgendaHoje(prev => [...prev, novo].sort((a,b)=>a.ordem-b.ordem));
+  }, []);
+
+  const removerAgendaItem = useCallback(async (id, data) => {
+    const { error } = await supabase.from("agenda").delete().eq("id", id);
+    if (error) { setErro(error.message); return; }
+    setAgendaMes(prev => prev.filter(a => a.id!==id));
+    if (data === TODAY) setAgendaHoje(prev => prev.filter(a => a.id!==id));
   }, []);
 
   if (!stores) return (
@@ -156,9 +197,8 @@ export default function AdminView({ onLogout }) {
     </div>
   );
 
-  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
-  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
-  const visitadosHoje = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+  const pdvsHoje      = stores.filter(s => agendaHoje.some(a => a.rota_id === s.rotaId));
+  const visitadosHoje = pdvsHoje.filter(s => daysSince(s.visita) === 0).length;
 
   const visitasPorPdv = {};
   for (const v of visitas) {
@@ -172,12 +212,21 @@ export default function AdminView({ onLogout }) {
   const prevDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split("T")[0]); };
   const nextDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split("T")[0]); };
 
+  const prevMonth = () => {
+    if (agendaMonth === 1) { setAgendaYear(y=>y-1); setAgendaMonth(12); }
+    else setAgendaMonth(m=>m-1);
+  };
+  const nextMonth = () => {
+    if (agendaMonth === 12) { setAgendaYear(y=>y+1); setAgendaMonth(1); }
+    else setAgendaMonth(m=>m+1);
+  };
+
   const NAV_TABS = [
-    ["geral",     "ti-chart-bar",      "Geral" ],
-    ["historico", "ti-calendar",       "Dia"   ],
-    ["pdvs",      "ti-building-store", "PDVs"  ],
-    ["rotas",     "ti-map-pin",        "Rotas" ],
-    ["pendentes", "ti-alert-circle",   "Pend." ],
+    ["geral",     "ti-chart-bar",      "Geral"  ],
+    ["historico", "ti-calendar",       "Dia"    ],
+    ["pdvs",      "ti-building-store", "PDVs"   ],
+    ["rotas",     "ti-map-pin",        "Rotas"  ],
+    ["agenda",    "ti-calendar-month", "Agenda" ],
   ];
 
   return (
@@ -211,27 +260,39 @@ export default function AdminView({ onLogout }) {
       {/* ── ABA GERAL ── */}
       {aba==="geral"&&(
         <div style={{ padding:"16px 16px 0" }}>
-          <div style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>ROTA ATIVA HOJE</div>
-            {rotaAtivaObj ? (
-              <>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>📍 {rotaAtivaObj.nome}</div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:24, fontWeight:700, color:C.yellow }}>{pdvsRotaAtiva.length>0?Math.round((visitadosHoje/pdvsRotaAtiva.length)*100):0}%</div>
+          {agendaHoje.length > 0 ? (
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
+              {agendaHoje.map(item => {
+                const rota = rotas.find(r => r.id === item.rota_id);
+                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
+                const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
+                return (
+                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px" }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
+                      {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>📍 {rota?.nome||"—"}</div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:C.yellow }}>{pdvsRota.length>0?Math.round((visitados/pdvsRota.length)*100):0}%</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginBottom:8 }}>{visitados} de {pdvsRota.length} visitados</div>
+                    {pdvsRota.length>0&&(
+                      <div style={{ height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(visitados/pdvsRota.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginBottom:10 }}>{visitadosHoje} de {pdvsRotaAtiva.length} visitados</div>
-                {pdvsRotaAtiva.length>0&&(
-                  <div style={{ height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${(visitadosHoje/pdvsRotaAtiva.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{ fontSize:14, color:"rgba(255,255,255,0.6)" }}>Nenhuma rota ativa no momento.</div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:20, padding:"18px 20px", marginBottom:16 }}>
+              <div style={{ fontSize:10, color:C.muted, fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>AGENDA DE HOJE</div>
+              <div style={{ fontSize:14, color:C.gray }}>Nenhuma rota definida para hoje. Configure na aba Agenda.</div>
+            </div>
+          )}
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             {[
@@ -250,12 +311,12 @@ export default function AdminView({ onLogout }) {
             ))}
           </div>
 
-          {rotaAtivaObj&&pdvsRotaAtiva.length>0&&(
+          {pdvsHoje.length>0&&(
             <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px" }}>
-              <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:10 }}>PENDENTES NA ROTA DE HOJE</div>
-              {pdvsRotaAtiva.filter(s=>daysSince(s.visita)!==0).length===0 ? (
+              <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:10 }}>PENDENTES DE HOJE</div>
+              {pdvsHoje.filter(s=>daysSince(s.visita)!==0).length===0 ? (
                 <div style={{ textAlign:"center", padding:"8px 0", color:C.green, fontSize:13, fontWeight:600 }}>🎉 Todos visitados hoje!</div>
-              ) : pdvsRotaAtiva.filter(s=>daysSince(s.visita)!==0).map(s=>(
+              ) : pdvsHoje.filter(s=>daysSince(s.visita)!==0).map(s=>(
                 <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${C.border}` }}>
                   <span style={{ fontSize:13, fontWeight:500, color:C.text }}>{s.nome}</span>
                   <span style={{ fontSize:11, color:C.gray }}>{s.visita?`${daysSince(s.visita)}d atrás`:"nunca"}</span>
@@ -306,19 +367,36 @@ export default function AdminView({ onLogout }) {
                   );
                 })}
               </div>
-              {rotaAtivaObj&&selectedDate===TODAY&&pdvsRotaAtiva.filter(s=>!visitasDoDiaIds.has(s.id)).length>0&&(
-                <div style={{ marginTop:16 }}>
-                  <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:8 }}>NÃO VISITADOS NA ROTA ({pdvsRotaAtiva.filter(s=>!visitasDoDiaIds.has(s.id)).length})</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                    {pdvsRotaAtiva.filter(s=>!visitasDoDiaIds.has(s.id)).map(s=>(
-                      <div key={s.id} style={{ padding:"10px 14px", background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${C.red}`, borderRadius:12, display:"flex", justifyContent:"space-between" }}>
-                        <span style={{ fontSize:13, fontWeight:500, color:C.text }}>{s.nome}</span>
-                        <span style={{ fontSize:11, color:C.gray }}>{s.visita?`${daysSince(s.visita)}d atrás`:"nunca"}</span>
-                      </div>
-                    ))}
+              {(() => {
+                const agendaDia = visitas.length>0
+                  ? stores.filter(s => {
+                      const visitasDia = visitas.filter(v=>v.data===selectedDate&&v.pdv_id===s.id);
+                      return visitasDia.length===0;
+                    }).filter(s => {
+                      const agendaItems = [];
+                      return false;
+                    })
+                  : [];
+                const pdvsNaoVisitadosHoje = selectedDate===TODAY
+                  ? pdvsHoje.filter(s=>!visitasDoDiaIds.has(s.id))
+                  : [];
+                if (pdvsNaoVisitadosHoje.length === 0) return null;
+                return (
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:8 }}>
+                      NÃO VISITADOS NAS ROTAS DE HOJE ({pdvsNaoVisitadosHoje.length})
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                      {pdvsNaoVisitadosHoje.map(s=>(
+                        <div key={s.id} style={{ padding:"10px 14px", background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${C.red}`, borderRadius:12, display:"flex", justifyContent:"space-between" }}>
+                          <span style={{ fontSize:13, fontWeight:500, color:C.text }}>{s.nome}</span>
+                          <span style={{ fontSize:11, color:C.gray }}>{s.visita?`${daysSince(s.visita)}d atrás`:"nunca"}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
         </div>
@@ -421,11 +499,11 @@ export default function AdminView({ onLogout }) {
               <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota criada ainda.</div>
             ) : rotas.map(r=>{
               const qtd = stores.filter(s=>s.rotaId===r.id).length;
-              const isActive = rotaAtiva===r.id;
+              const isHoje = agendaHoje.some(a => a.rota_id === r.id);
               const isEditingR = editRota?.id===r.id;
               const isDelR = confirmDelRota===r.id;
               return (
-                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isActive?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px" }}>
+                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px" }}>
                   {isEditingR ? (
                     <div style={{ display:"flex", gap:7 }}>
                       <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus />
@@ -439,17 +517,10 @@ export default function AdminView({ onLogout }) {
                           <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
                           <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
                         </div>
-                        {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>ATIVA HOJE</span>}
+                        {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
                       </div>
                       <div style={{ display:"flex", gap:7 }}>
-                        {!isActive ? (
-                          <Btn variant="blue" style={{flex:1,padding:"10px 0",fontSize:12}}>
-                            <span onClick={()=>ativarRota(r.id)}>🎯 Ativar para hoje</span>
-                          </Btn>
-                        ) : (
-                          <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12,opacity:0.8,cursor:"default"}}>✓ Em andamento</Btn>
-                        )}
-                        <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️</Btn>
+                        <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️ Renomear</Btn>
                         {isDelR ? (
                           <>
                             <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
@@ -468,57 +539,100 @@ export default function AdminView({ onLogout }) {
         </div>
       )}
 
-      {/* ── ABA PENDENTES ── */}
-      {aba==="pendentes"&&(
+      {/* ── ABA AGENDA ── */}
+      {aba==="agenda"&&(
         <div style={{ padding:"16px 16px 0" }}>
-          {/* Contadores */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
-            {[
-              { label:"URGENTE",  val:stores.filter(s=>getUrgencia(s.visita)==="critica").length, color:"#ef4444", bg:"#fef2f2" },
-              { label:"PENDENTE", val:stores.filter(s=>getUrgencia(s.visita)==="media").length,   color:"#d97706", bg:"#fffbeb" },
-              { label:"EM DIA",   val:stores.filter(s=>getUrgencia(s.visita)==="ok").length,      color:"#16a34a", bg:"#f0fdf4" },
-            ].map(({ label, val, color, bg })=>(
-              <div key={label} style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:14, padding:"12px 0", textAlign:"center" }}>
-                <div style={{ fontSize:20, fontWeight:700, color, fontVariantNumeric:"tabular-nums" }}>{val}</div>
-                <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>{label}</div>
-              </div>
-            ))}
+          {/* Navegação de mês */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={prevMonth}>‹</Btn>
+            <div style={{ flex:1, textAlign:"center" }}>
+              <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{MONTHS_PT[agendaMonth-1]}</div>
+              <div style={{ fontSize:12, color:C.gray }}>{agendaYear}</div>
+            </div>
+            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={nextMonth}>›</Btn>
           </div>
 
-          {/* Seções por urgência */}
-          {[
-            { urg:"critica", icon:"🔴", label:"Urgente",   hColor:"#991b1b", hBg:"#fef2f2" },
-            { urg:"media",   icon:"🟡", label:"Pendentes", hColor:"#92400e", hBg:"#fffbeb" },
-            { urg:"ok",      icon:"✅", label:"Em dia",    hColor:"#166534", hBg:"#f0fdf4" },
-          ].map(({ urg, icon, label, hColor, hBg })=>{
-            const pdvs = stores.filter(s=>getUrgencia(s.visita)===urg).sort(cepCmp);
-            if (pdvs.length===0) return null;
-            const cfg = URGENCIA[urg];
-            return (
-              <div key={urg} style={{ marginBottom:14 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:hColor, letterSpacing:"0.06em", padding:"8px 12px", background:hBg, borderRadius:10, marginBottom:8 }}>
-                  {icon} {label} ({pdvs.length})
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                  {pdvs.map(s=>{
-                    const d = s.visita ? daysSince(s.visita) : null;
-                    return (
-                      <div key={s.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, borderRadius:12, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:14, fontWeight:600, color:C.text }}>{s.nome}</div>
-                          <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{TIPO_LABEL[s.tipo]} · {s.end}</div>
-                        </div>
-                        <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
-                          <div style={{ fontSize:14, fontWeight:700, color:cfg.barColor, fontVariantNumeric:"tabular-nums" }}>{d!==null?`${d}d`:"nunca"}</div>
-                          {s.visita&&<div style={{ fontSize:10, color:C.gray }}>{fmtDate(s.visita)}</div>}
-                        </div>
+          {rotas.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>
+              Crie rotas primeiro na aba Rotas.
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {Array.from({ length: daysInMonth(agendaYear, agendaMonth) }, (_, i) => i + 1).map(dia => {
+                const dateStr = toDateStr(agendaYear, agendaMonth, dia);
+                const items   = agendaMes.filter(a => a.data === dateStr).sort((a,b) => a.ordem-b.ordem);
+                const weekday = WEEKDAY[new Date(dateStr+"T12:00:00").getDay()];
+                const isToday = dateStr === TODAY;
+                const isPast  = dateStr < TODAY;
+                const rotasDisponiveis = rotas.filter(r => !items.find(i => i.rota_id === r.id));
+
+                return (
+                  <div key={dia} style={{
+                    background: C.white,
+                    border: `1px solid ${isToday ? C.blue : C.border}`,
+                    borderLeft: `3px solid ${isToday ? C.blue : items.length>0 ? C.yellow : C.border}`,
+                    borderRadius:14, padding:"12px 14px",
+                    opacity: isPast && !isToday ? 0.6 : 1,
+                  }}>
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                      {/* Dia */}
+                      <div style={{ minWidth:42, textAlign:"center", flexShrink:0 }}>
+                        <div style={{ fontSize:18, fontWeight:700, color: isToday ? C.blue : C.text, lineHeight:1 }}>{padZ(dia)}</div>
+                        <div style={{ fontSize:10, color: isToday ? C.blue : C.gray, fontWeight:600, marginTop:2 }}>{weekday}</div>
+                        {isToday && <div style={{ fontSize:9, color:C.blue, fontWeight:700, letterSpacing:"0.04em", marginTop:2 }}>HOJE</div>}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+
+                      {/* Rotas atribuídas + botão adicionar */}
+                      <div style={{ flex:1, display:"flex", flexWrap:"wrap", gap:6, alignItems:"center" }}>
+                        {items.map((item, idx) => {
+                          const rota = rotas.find(r => r.id === item.rota_id);
+                          return (
+                            <div key={item.id} style={{
+                              display:"flex", alignItems:"center", gap:5,
+                              background: C.blueDim, borderRadius:99,
+                              padding:"5px 10px 5px 12px", fontSize:12, fontWeight:600, color:C.blue,
+                            }}>
+                              <span>{idx+1}. {rota?.nome||"?"}</span>
+                              <button
+                                onClick={()=>removerAgendaItem(item.id, item.data)}
+                                style={{ background:"none", border:"none", cursor:"pointer", color:C.blue, fontSize:14, lineHeight:1, padding:"0 2px", opacity:0.6 }}
+                              >×</button>
+                            </div>
+                          );
+                        })}
+
+                        {items.length < 2 && rotasDisponiveis.length > 0 && (
+                          <select
+                            value=""
+                            onChange={e => {
+                              if (!e.target.value) return;
+                              adicionarAgendaItem(dateStr, e.target.value, items.length + 1);
+                              e.target.value = "";
+                            }}
+                            style={{
+                              fontSize:11, fontWeight:600, color:C.blue,
+                              background:C.grayDim, border:`1px dashed ${C.border}`,
+                              borderRadius:99, padding:"5px 10px", cursor:"pointer",
+                              fontFamily:FONT, outline:"none",
+                            }}
+                          >
+                            <option value="">+ Rota</option>
+                            {rotasDisponiveis.map(r => (
+                              <option key={r.id} value={r.id}>{r.nome}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {items.length === 0 && (
+                          <span style={{ fontSize:12, color:C.gray, fontStyle:"italic" }}>Sem rota</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
