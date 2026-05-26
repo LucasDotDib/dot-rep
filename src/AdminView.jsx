@@ -25,8 +25,9 @@ export default function AdminView({ onLogout }) {
   const [stores,    setStores]    = useState(null);
   const [visitas,   setVisitas]   = useState([]);
   const [rotas,     setRotas]     = useState([]);
-  const [agendaHoje,   setAgendaHoje]   = useState([]);
-  const [agendaSemana, setAgendaSemana] = useState([]);
+  const [agendaHoje,     setAgendaHoje]     = useState([]);
+  const [agendaSemana,   setAgendaSemana]   = useState([]);
+  const [agendaMesAtual, setAgendaMesAtual] = useState([]);
   const [erro,      setErro]      = useState(null);
 
   const [showAdd,     setShowAdd]     = useState(false);
@@ -52,12 +53,16 @@ export default function AdminView({ onLogout }) {
   const carregar = useCallback(async () => {
     try {
       const [weekStart, weekEnd] = getWeekRange();
-      const [pdvs, vis, rts, agenda, semana] = await Promise.all([
+      const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
+      const mesStart = toDateStr(curYear, curMonth, 1);
+      const mesEnd   = toDateStr(curYear, curMonth, daysInMonth(curYear, curMonth));
+      const [pdvs, vis, rts, agenda, semana, mesAtual] = await Promise.all([
         supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
         supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
         supabase.from("rotas").select("*").order("nome", { ascending:true }),
         supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
         supabase.from("agenda").select("*").gte("data", weekStart).lte("data", weekEnd),
+        supabase.from("agenda").select("*").gte("data", mesStart).lte("data", mesEnd),
       ]);
       const err = pdvs.error || vis.error || rts.error;
       if (err) { setErro(err.message); return; }
@@ -66,6 +71,7 @@ export default function AdminView({ onLogout }) {
       setRotas(rts.data||[]);
       setAgendaHoje(agenda.data||[]);
       setAgendaSemana(semana.data||[]);
+      setAgendaMesAtual(mesAtual.data||[]);
     } catch(e) {
       setErro(e.message||"Erro ao carregar dados.");
     }
@@ -102,6 +108,11 @@ export default function AdminView({ onLogout }) {
         const [weekStart, weekEnd] = getWeekRange();
         supabase.from("agenda").select("*").gte("data", weekStart).lte("data", weekEnd)
           .then(({ data }) => setAgendaSemana(data||[]));
+        const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
+        const mesStart = toDateStr(curYear, curMonth, 1);
+        const mesEnd   = toDateStr(curYear, curMonth, daysInMonth(curYear, curMonth));
+        supabase.from("agenda").select("*").gte("data", mesStart).lte("data", mesEnd)
+          .then(({ data }) => setAgendaMesAtual(data||[]));
         const { year, month } = agendaViewRef.current;
         const first = toDateStr(year, month, 1);
         const last  = toDateStr(year, month, daysInMonth(year, month));
@@ -391,6 +402,40 @@ export default function AdminView({ onLogout }) {
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.gray }}>
                   <span><span style={{ color:C.green, fontWeight:600 }}>{vendendo}</span> já vendem</span>
                   <span><span style={{ color:C.red, fontWeight:600 }}>{total - vendendo}</span> ainda não</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const rotasNoMes = [...new Set(agendaMesAtual.map(a => a.rota_id))];
+            if (rotasNoMes.length === 0) return null;
+            const visitasMes = new Set(
+              visitas.filter(v => v.data >= toDateStr(now.getFullYear(), now.getMonth()+1, 1) && v.data <= TODAY).map(v => v.pdv_id)
+            );
+            return (
+              <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
+                <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:12 }}>COBERTURA DO MÊS — {MONTHS_PT[now.getMonth()].toUpperCase()}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {rotasNoMes.map(rotaId => {
+                    const rota      = rotas.find(r => r.id === rotaId);
+                    const pdvsRota  = stores.filter(s => s.rotaId === rotaId);
+                    const visitados = pdvsRota.filter(s => visitasMes.has(s.id)).length;
+                    const total     = pdvsRota.length;
+                    const pct       = total > 0 ? Math.round((visitados / total) * 100) : 0;
+                    const color     = pct === 100 ? C.green : pct >= 50 ? C.amber : C.red;
+                    return (
+                      <div key={rotaId}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+                          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>📍 {rota?.nome||"—"}</span>
+                          <span style={{ fontSize:12, fontWeight:700, color }}>{visitados}/{total} PDVs · {pct}%</span>
+                        </div>
+                        <div style={{ height:5, background:C.border, borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:99, transition:"width 0.4s" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -774,13 +819,29 @@ export default function AdminView({ onLogout }) {
                 const isPast  = dateStr < TODAY;
                 const rotasDisponiveis = rotas.filter(r => !items.find(i => i.rota_id === r.id));
 
+                let coverageColor = items.length > 0 ? C.yellow : C.border;
+                let coverageBadge = null;
+                if ((isPast || isToday) && items.length > 0) {
+                  const rotaIds    = new Set(items.map(i => i.rota_id));
+                  const pdvsDia    = stores.filter(s => rotaIds.has(s.rotaId));
+                  const visitadosDia = new Set(visitas.filter(v => v.data === dateStr).map(v => v.pdv_id));
+                  const nVisitados = pdvsDia.filter(s => visitadosDia.has(s.id)).length;
+                  const nTotal     = pdvsDia.length;
+                  if (nTotal > 0) {
+                    const pct = nVisitados / nTotal;
+                    if (pct === 1)      { coverageColor = C.green;  coverageBadge = { icon:"✓", color:C.green,  bg:C.greenDim,  label:`${nVisitados}/${nTotal}` }; }
+                    else if (pct > 0)   { coverageColor = C.amber;  coverageBadge = { icon:"~", color:C.amber,  bg:C.amberDim,  label:`${nVisitados}/${nTotal}` }; }
+                    else                { coverageColor = C.red;    coverageBadge = { icon:"✗", color:C.red,    bg:C.redDim,    label:`0/${nTotal}` }; }
+                  }
+                }
+
                 return (
                   <div key={dia} style={{
                     background: C.white,
                     border: `1px solid ${isToday ? C.blue : C.border}`,
-                    borderLeft: `3px solid ${isToday ? C.blue : items.length>0 ? C.yellow : C.border}`,
+                    borderLeft: `3px solid ${isToday ? C.blue : coverageColor}`,
                     borderRadius:14, padding:"12px 14px",
-                    opacity: isPast && !isToday ? 0.6 : 1,
+                    opacity: isPast && !isToday ? 0.75 : 1,
                   }}>
                     <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
                       {/* Dia */}
@@ -788,6 +849,11 @@ export default function AdminView({ onLogout }) {
                         <div style={{ fontSize:18, fontWeight:700, color: isToday ? C.blue : C.text, lineHeight:1 }}>{padZ(dia)}</div>
                         <div style={{ fontSize:10, color: isToday ? C.blue : C.gray, fontWeight:600, marginTop:2 }}>{weekday}</div>
                         {isToday && <div style={{ fontSize:9, color:C.blue, fontWeight:700, letterSpacing:"0.04em", marginTop:2 }}>HOJE</div>}
+                        {coverageBadge && (
+                          <div style={{ marginTop:4, fontSize:10, fontWeight:700, color:coverageBadge.color, background:coverageBadge.bg, borderRadius:6, padding:"2px 4px" }}>
+                            {coverageBadge.icon} {coverageBadge.label}
+                          </div>
+                        )}
                       </div>
 
                       {/* Rotas atribuídas + botão adicionar */}
