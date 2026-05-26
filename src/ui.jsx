@@ -63,7 +63,7 @@ export const fmtCep       = v  => { const d=v.replace(/\D/g,"").slice(0,8); retu
 export const fromDB = r => ({
   id:r.id, nome:r.nome, end:r.endereco||"", cep:r.cep||"", tipo:r.tipo||"facu",
   prio:r.prioridade||0, vendeu:r.vendeu_dot||false, visita:r.ultima_visita||null,
-  obs:r.obs||"", rotaId:r.rota_id||null,
+  obs:r.obs||"", rotaId:r.rota_id||null, comprador:r.comprador||"",
 });
 
 export const TIPO_LABEL = { facu:"Faculdade", corp:"Corporativo", armazem:"Armazém", bar:"Bar / Rest.", outro:"Outro" };
@@ -97,6 +97,7 @@ export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
         <input placeholder="Nome do estabelecimento *" value={form.nome} onChange={e=>set("nome",e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} style={errors.nome?iptErr:ipt} autoFocus />
         {errors.nome&&<p style={{fontSize:11,color:C.red,margin:"4px 0 0"}}>Nome obrigatório</p>}
       </div>
+      <input placeholder="Nome do comprador / responsável" value={form.comprador||""} onChange={e=>set("comprador",e.target.value)} style={ipt} />
       <div>
         <input placeholder="Endereço *" value={form.end} onChange={e=>set("end",e.target.value)} style={errors.end?iptErr:ipt} />
         {errors.end&&<p style={{fontSize:11,color:C.red,margin:"4px 0 0"}}>Endereço obrigatório</p>}

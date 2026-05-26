@@ -104,6 +104,7 @@ export default function AdminView({ onLogout }) {
       id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:form.rotaId||null,
+      comprador:form.comprador?.trim()||"",
     }]);
     if (error) { setErro(error.message); }
     else {
@@ -112,6 +113,7 @@ export default function AdminView({ onLogout }) {
         id:newId, nome:form.nome.trim(), end:form.end.trim(),
         cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prio:0,
         vendeu:false, visita:null, obs:"", rotaId:form.rotaId||null,
+        comprador:form.comprador?.trim()||"",
       }]);
     }
     setSaving(false);
@@ -122,6 +124,7 @@ export default function AdminView({ onLogout }) {
     const { error } = await supabase.from("pdvs").update({
       nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
+      comprador:form.comprador?.trim()||"",
     }).eq("id", id);
     if (error) { setErro(error.message); }
     else {
@@ -129,6 +132,7 @@ export default function AdminView({ onLogout }) {
       setStores(prev => prev.map(s => s.id===id ? {
         ...s, nome:form.nome.trim(), end:form.end.trim(),
         cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rotaId:form.rotaId,
+        comprador:form.comprador?.trim()||"",
       } : s));
     }
     setSaving(false);
@@ -428,6 +432,7 @@ export default function AdminView({ onLogout }) {
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:14, fontWeight:600, color:C.text }}>{s.nome}</div>
                         <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{TIPO_LABEL[s.tipo]} · {s.end}</div>
+                        {s.comprador&&<div style={{ fontSize:11, color:"#7c3aed", marginTop:2 }}>👤 {s.comprador}</div>}
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
                         <div style={{ fontSize:12, fontWeight:700, color:cfg.barColor }}>{d!==null?d===0?"hoje":`${d}d atrás`:"nunca"}</div>
@@ -440,7 +445,7 @@ export default function AdminView({ onLogout }) {
                           <div style={{ paddingTop:14 }}>
                             <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:12 }}>EDITAR PDV</div>
                             <FormPDV
-                              initial={{ nome:s.nome, end:s.end, cep:s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):"", tipo:s.tipo, prio:s.prio, rotaId:s.rotaId }}
+                              initial={{ nome:s.nome, end:s.end, cep:s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):"", tipo:s.tipo, prio:s.prio, rotaId:s.rotaId, comprador:s.comprador||"" }}
                               onSave={(form)=>editar(s.id, form)}
                               onCancel={()=>setEditingPdv(null)}
                               saving={saving} rotas={rotas}

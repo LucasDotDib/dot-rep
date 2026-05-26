@@ -50,8 +50,9 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
         </div>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, marginBottom:2 }}>
           <Tag>{TIPO_LABEL[s.tipo]}</Tag>
-          {rota   && <Tag bg="#eff6ff" color={C.blue}>📍 {rota.nome}</Tag>}
-          {s.vendeu && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
+          {rota      && <Tag bg="#eff6ff" color={C.blue}>📍 {rota.nome}</Tag>}
+          {s.vendeu  && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
+          {s.comprador && <Tag bg="#f5f0ff" color="#7c3aed">👤 {s.comprador}</Tag>}
         </div>
       </div>
 
@@ -103,7 +104,7 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
             <div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:12 }}>EDITAR PDV</div>
               <FormPDV
-                initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId}}
+                initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId,comprador:s.comprador||""}}
                 onSave={(form)=>editar(s.id,form)}
                 onCancel={()=>setEditing(null)}
                 saving={saving} rotas={rotas}
@@ -256,6 +257,7 @@ export default function RepView({ onLogout }) {
       id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal,
+      comprador:form.comprador?.trim()||"",
     }]);
     if (error) { setErro(error.message); }
     else {
@@ -264,6 +266,7 @@ export default function RepView({ onLogout }) {
         id:newId, nome:form.nome.trim(), end:form.end.trim(),
         cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prio:0,
         vendeu:false, visita:null, obs:"", rotaId:rotaFinal,
+        comprador:form.comprador?.trim()||"",
       }]);
     }
     setSaving(false);
@@ -274,6 +277,7 @@ export default function RepView({ onLogout }) {
     const { error } = await supabase.from("pdvs").update({
       nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
+      comprador:form.comprador?.trim()||"",
     }).eq("id", id);
     if (error) { setErro(error.message); }
     else {
@@ -281,6 +285,7 @@ export default function RepView({ onLogout }) {
       setStores(prev => prev.map(s => s.id===id ? {
         ...s, nome:form.nome.trim(), end:form.end.trim(),
         cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rotaId:form.rotaId,
+        comprador:form.comprador?.trim()||"",
       } : s));
     }
     setSaving(false);
