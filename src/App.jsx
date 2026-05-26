@@ -13,10 +13,11 @@ export default function App() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    const timeout = setTimeout(() => setLoading(false), 5000);
+    supabase.auth.getSession()
+      .then(({ data }) => { setSession(data.session); setLoading(false); })
+      .catch(() => setLoading(false))
+      .finally(() => clearTimeout(timeout));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
