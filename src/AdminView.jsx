@@ -34,6 +34,7 @@ export default function AdminView({ onLogout }) {
   const [selectedPdv, setSelectedPdv] = useState(null);
   const [editingPdv,  setEditingPdv]  = useState(null);
   const [searchPdv,   setSearchPdv]   = useState("");
+  const [filterRota,  setFilterRota]  = useState(null);
 
   const [novaRota,       setNovaRota]       = useState("");
   const [editRota,       setEditRota]       = useState(null);
@@ -523,10 +524,25 @@ export default function AdminView({ onLogout }) {
               <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:null }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
-          <input type="text" placeholder="Buscar PDV…" value={searchPdv} onChange={e=>{ setSearchPdv(e.target.value); setSelectedPdv(null); }} style={{ ...ipt, marginBottom:12 }} />
+          <input type="text" placeholder="Buscar PDV…" value={searchPdv} onChange={e=>{ setSearchPdv(e.target.value); setSelectedPdv(null); }} style={{ ...ipt, marginBottom:10 }} />
+          <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:10, scrollbarWidth:"none" }}>
+            {[{ id:null, nome:"Todas" }, ...rotas, { id:"sem-rota", nome:"Sem rota" }].map(r=>(
+              <button key={r.id||"todas"} onClick={()=>{ setFilterRota(r.id); setSelectedPdv(null); }} style={{
+                flexShrink:0, padding:"6px 14px", borderRadius:99, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:600, fontFamily:FONT,
+                background: filterRota===r.id ? C.blue : C.grayDim,
+                color:       filterRota===r.id ? "#fff"  : C.muted,
+              }}>{r.nome}</button>
+            ))}
+          </div>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {stores
-              .filter(s=>!searchPdv||s.nome.toLowerCase().includes(searchPdv.toLowerCase())||(s.end||"").toLowerCase().includes(searchPdv.toLowerCase()))
+              .filter(s => {
+                const q = searchPdv.toLowerCase();
+                const matchSearch = !q || s.nome.toLowerCase().includes(q) || (s.end||"").toLowerCase().includes(q);
+                const matchRota   = filterRota === null ? true : filterRota === "sem-rota" ? !s.rotaId : s.rotaId === filterRota;
+                return matchSearch && matchRota;
+              })
               .sort((a,b)=>URG_ORDER[getUrgencia(a.visita)]-URG_ORDER[getUrgencia(b.visita)] || cepCmp(a,b))
               .map(s=>{
                 const hist = visitasPorPdv[s.id]||[];
