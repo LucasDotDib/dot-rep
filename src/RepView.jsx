@@ -183,22 +183,27 @@ export default function RepView({ onLogout }) {
   const agendaViewRef = useRef({ year: now.getFullYear(), month: now.getMonth() + 1 });
 
   const carregar = useCallback(async () => {
-    const [pdvs, rts, agenda, vis] = await Promise.all([
-      supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
-      supabase.from("rotas").select("*").order("nome", { ascending:true }),
-      supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
-      supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
-    ]);
-    if (pdvs.error) { setErro(pdvs.error.message); return; }
-    setStores((pdvs.data||[]).map(fromDB));
-    setRotas(rts.data||[]);
-    setAgendaHoje(agenda.data||[]);
-    const hist = {};
-    for (const v of (vis.data||[])) {
-      if (!hist[v.pdv_id]) hist[v.pdv_id] = [];
-      hist[v.pdv_id].push({ id:v.id, data:v.data, obs:v.obs||"" });
+    try {
+      const [pdvs, rts, agenda, vis] = await Promise.all([
+        supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
+        supabase.from("rotas").select("*").order("nome", { ascending:true }),
+        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
+        supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
+      ]);
+      const err = pdvs.error || rts.error || vis.error;
+      if (err) { setErro(err.message); return; }
+      setStores((pdvs.data||[]).map(fromDB));
+      setRotas(rts.data||[]);
+      setAgendaHoje(agenda.data||[]);
+      const hist = {};
+      for (const v of (vis.data||[])) {
+        if (!hist[v.pdv_id]) hist[v.pdv_id] = [];
+        hist[v.pdv_id].push({ id:v.id, data:v.data, obs:v.obs||"" });
+      }
+      setHistorico(hist);
+    } catch(e) {
+      setErro(e.message||"Erro ao carregar dados.");
     }
-    setHistorico(hist);
   }, []);
 
   const carregarAgenda = useCallback(async (year, month) => {

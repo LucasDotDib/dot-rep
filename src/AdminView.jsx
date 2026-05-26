@@ -40,17 +40,22 @@ export default function AdminView({ onLogout }) {
   const agendaViewRef = useRef({ year: now.getFullYear(), month: now.getMonth() + 1 });
 
   const carregar = useCallback(async () => {
-    const [pdvs, vis, rts, agenda] = await Promise.all([
-      supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
-      supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
-      supabase.from("rotas").select("*").order("nome", { ascending:true }),
-      supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
-    ]);
-    if (pdvs.error) { setErro(pdvs.error.message); return; }
-    setStores((pdvs.data||[]).map(fromDB));
-    setVisitas(vis.data||[]);
-    setRotas(rts.data||[]);
-    setAgendaHoje(agenda.data||[]);
+    try {
+      const [pdvs, vis, rts, agenda] = await Promise.all([
+        supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
+        supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
+        supabase.from("rotas").select("*").order("nome", { ascending:true }),
+        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
+      ]);
+      const err = pdvs.error || vis.error || rts.error;
+      if (err) { setErro(err.message); return; }
+      setStores((pdvs.data||[]).map(fromDB));
+      setVisitas(vis.data||[]);
+      setRotas(rts.data||[]);
+      setAgendaHoje(agenda.data||[]);
+    } catch(e) {
+      setErro(e.message||"Erro ao carregar dados.");
+    }
   }, []);
 
   const carregarAgenda = useCallback(async (year, month) => {
