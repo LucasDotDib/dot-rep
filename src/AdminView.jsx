@@ -410,25 +410,30 @@ export default function AdminView({ onLogout }) {
           {(() => {
             const rotasNoMes = [...new Set(agendaMesAtual.map(a => a.rota_id))];
             if (rotasNoMes.length === 0) return null;
-            const visitasMes = new Set(
-              visitas.filter(v => v.data >= toDateStr(now.getFullYear(), now.getMonth()+1, 1) && v.data <= TODAY).map(v => v.pdv_id)
-            );
+            const mesStart = toDateStr(now.getFullYear(), now.getMonth()+1, 1);
+            const contadorVisitas = {};
+            visitas
+              .filter(v => v.data >= mesStart && v.data <= TODAY)
+              .forEach(v => { contadorVisitas[v.pdv_id] = (contadorVisitas[v.pdv_id]||0) + 1; });
             return (
               <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
-                <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:12 }}>COBERTURA DO MÊS — {MONTHS_PT[now.getMonth()].toUpperCase()}</div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <span style={{ fontSize:11, color:C.muted, fontWeight:700, letterSpacing:"0.06em" }}>COBERTURA DO MÊS — {MONTHS_PT[now.getMonth()].toUpperCase()}</span>
+                  <span style={{ fontSize:10, color:C.gray, fontWeight:500 }}>meta: 2x por PDV</span>
+                </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                   {rotasNoMes.map(rotaId => {
-                    const rota      = rotas.find(r => r.id === rotaId);
-                    const pdvsRota  = stores.filter(s => s.rotaId === rotaId);
-                    const visitados = pdvsRota.filter(s => visitasMes.has(s.id)).length;
-                    const total     = pdvsRota.length;
-                    const pct       = total > 0 ? Math.round((visitados / total) * 100) : 0;
-                    const color     = pct === 100 ? C.green : pct >= 50 ? C.amber : C.red;
+                    const rota       = rotas.find(r => r.id === rotaId);
+                    const pdvsRota   = stores.filter(s => s.rotaId === rotaId);
+                    const completos  = pdvsRota.filter(s => (contadorVisitas[s.id]||0) >= 2).length;
+                    const total      = pdvsRota.length;
+                    const pct        = total > 0 ? Math.round((completos / total) * 100) : 0;
+                    const color      = pct === 100 ? C.green : pct >= 50 ? C.amber : C.red;
                     return (
                       <div key={rotaId}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
                           <span style={{ fontSize:13, fontWeight:600, color:C.text }}>📍 {rota?.nome||"—"}</span>
-                          <span style={{ fontSize:12, fontWeight:700, color }}>{visitados}/{total} PDVs · {pct}%</span>
+                          <span style={{ fontSize:12, fontWeight:700, color }}>{completos}/{total} · {pct}%</span>
                         </div>
                         <div style={{ height:5, background:C.border, borderRadius:99, overflow:"hidden" }}>
                           <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:99, transition:"width 0.4s" }} />
