@@ -30,6 +30,7 @@ function SectionHead({ icon, label, count, color, bg, collapsible, collapsed, on
 
 function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving, marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
   const urg = getUrgencia(s.visita), cfg = URGENCIA[urg];
+  const [compradorEdit, setCompradorEdit] = useState(s.comprador||"");
   const isVisitedToday = daysSince(s.visita) === 0;
   const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id;
   const isMarcando = marcandoId===s.id;
@@ -101,14 +102,22 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
       {isExp&&(
         <div style={{ padding:"12px 14px 14px", borderTop:`1px solid ${C.border}` }}>
           {isEdit ? (
-            <div>
-              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:12 }}>EDITAR PDV</div>
-              <FormPDV
-                initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId,comprador:s.comprador||""}}
-                onSave={(form)=>editar(s.id,form)}
-                onCancel={()=>setEditing(null)}
-                saving={saving} rotas={rotas}
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em" }}>COMPRADOR / RESPONSÁVEL</div>
+              <input
+                value={compradorEdit}
+                onChange={e=>setCompradorEdit(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&editar(s.id, compradorEdit)}
+                placeholder="Nome do comprador…"
+                style={{...ipt, fontSize:13}}
+                autoFocus
               />
+              <div style={{ display:"flex", gap:8 }}>
+                <Btn variant="yellow" style={{flex:1,padding:"11px 0",fontSize:13}} onClick={()=>editar(s.id, compradorEdit)} disabled={saving}>
+                  {saving?"Salvando…":"Salvar"}
+                </Btn>
+                <Btn variant="ghost" style={{padding:"11px 14px",fontSize:13}} onClick={()=>setEditing(null)}>Cancelar</Btn>
+              </div>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -135,17 +144,9 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
                   </div>
                 </div>
               )}
-              <div style={{ display:"flex", gap:7 }}>
-                <Btn variant="default" style={{flex:1,padding:"9px 0",fontSize:12}} onClick={()=>setEditing(s.id)}>✏️ Editar dados</Btn>
-                {isDel ? (
-                  <>
-                    <Btn variant="danger" style={{flex:1,padding:"9px 0",fontSize:12}} onClick={()=>remover(s.id)}>Confirmar</Btn>
-                    <Btn variant="ghost" style={{padding:"9px 12px",fontSize:12}} onClick={()=>setConfirmDel(null)}>Não</Btn>
-                  </>
-                ) : (
-                  <Btn variant="danger" style={{padding:"9px 12px",fontSize:12}} onClick={()=>setConfirmDel(s.id)}>🗑</Btn>
-                )}
-              </div>
+              <Btn variant="default" style={{width:"100%",padding:"9px 0",fontSize:12}} onClick={()=>{ setCompradorEdit(s.comprador||""); setEditing(s.id); }}>
+                ✏️ Editar comprador
+              </Btn>
             </div>
           )}
         </div>
@@ -277,21 +278,15 @@ export default function RepView({ onLogout }) {
     setSaving(false);
   }, [aba, agendaHoje]);
 
-  const editar = useCallback(async (id, form) => {
+  const editar = useCallback(async (id, comprador) => {
     setSaving(true);
     const { error } = await supabase.from("pdvs").update({
-      nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
-      comprador:form.comprador?.trim()||"",
+      comprador: comprador?.trim()||"",
     }).eq("id", id);
     if (error) { setErro(error.message); }
     else {
       setEditing(null);
-      setStores(prev => prev.map(s => s.id===id ? {
-        ...s, nome:form.nome.trim(), end:form.end.trim(),
-        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rotaId:form.rotaId,
-        comprador:form.comprador?.trim()||"",
-      } : s));
+      setStores(prev => prev.map(s => s.id===id ? { ...s, comprador: comprador?.trim()||"" } : s));
     }
     setSaving(false);
   }, []);
