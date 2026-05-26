@@ -449,10 +449,17 @@ export default function AdminView({ onLogout }) {
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                   {obsRecentes.map(v => {
                     const pdv = stores.find(s => s.id === v.pdv_id);
+                    const handleClick = pdv ? () => {
+                      setSearchPdv(""); setFilterRota(null);
+                      setSelectedPdv(pdv.id); setAba("pdvs");
+                    } : undefined;
                     return (
                       <div key={v.id} style={{ borderLeft:`3px solid ${C.blueDim}`, paddingLeft:12 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
-                          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{pdv?.nome||"PDV removido"}</span>
+                          <span
+                            onClick={handleClick}
+                            style={{ fontSize:13, fontWeight:600, color:pdv?C.blue:C.text, cursor:pdv?"pointer":undefined, textDecoration:pdv?"underline":undefined, textDecorationStyle:"dotted" }}
+                          >{pdv?.nome||"PDV removido"}</span>
                           <span style={{ fontSize:11, color:C.gray, flexShrink:0, marginLeft:8, fontFamily:"monospace" }}>{fmtDate(v.data)}</span>
                         </div>
                         <p style={{ margin:0, fontSize:12, color:C.muted, lineHeight:1.5, fontStyle:"italic" }}>"{v.obs}"</p>
