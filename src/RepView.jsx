@@ -190,10 +190,26 @@ export default function RepView({ onLogout }) {
   useEffect(() => {
     carregar();
     const ch = supabase.channel("rep-changes")
-      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" },       ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" },      ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ()=>carregar())
-      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" },    ()=>carregar())
+      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" }, ({ eventType, new:n, old:o }) => {
+        if (eventType==="INSERT")      setStores(prev => [...prev, fromDB(n)]);
+        else if (eventType==="UPDATE") setStores(prev => prev.map(s => s.id===n.id ? fromDB(n) : s));
+        else if (eventType==="DELETE") setStores(prev => prev.filter(s => s.id!==o.id));
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" }, ({ eventType, new:n, old:o }) => {
+        if (eventType==="INSERT")      setRotas(prev => [...prev, n].sort((a,b)=>a.nome.localeCompare(b.nome)));
+        else if (eventType==="UPDATE") setRotas(prev => prev.map(r => r.id===n.id ? n : r));
+        else if (eventType==="DELETE") setRotas(prev => prev.filter(r => r.id!==o.id));
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"rota_ativa" }, ({ new:n }) => {
+        setRotaAtiva(n?.rota_id||null);
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" }, ({ eventType, new:n }) => {
+        if (eventType==="INSERT" && n)
+          setHistorico(prev => ({
+            ...prev,
+            [n.pdv_id]: [{ id:n.id, data:n.data, obs:n.obs||"" }, ...(prev[n.pdv_id]||[])],
+          }));
+      })
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [carregar]);
