@@ -12,12 +12,21 @@ const toDateStr = (y, m, d) => `${y}-${padZ(m)}-${padZ(d)}`;
 const WEEKDAY = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
+const getWeekRange = () => {
+  const d = new Date(TODAY + "T12:00:00");
+  const day = d.getDay();
+  const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return [mon.toISOString().split("T")[0], sun.toISOString().split("T")[0]];
+};
+
 export default function AdminView({ onLogout }) {
   const [aba,       setAba]       = useState("geral");
   const [stores,    setStores]    = useState(null);
   const [visitas,   setVisitas]   = useState([]);
   const [rotas,     setRotas]     = useState([]);
-  const [agendaHoje, setAgendaHoje] = useState([]);
+  const [agendaHoje,   setAgendaHoje]   = useState([]);
+  const [agendaSemana, setAgendaSemana] = useState([]);
   const [erro,      setErro]      = useState(null);
 
   const [showAdd,     setShowAdd]     = useState(false);
@@ -41,11 +50,13 @@ export default function AdminView({ onLogout }) {
 
   const carregar = useCallback(async () => {
     try {
-      const [pdvs, vis, rts, agenda] = await Promise.all([
+      const [weekStart, weekEnd] = getWeekRange();
+      const [pdvs, vis, rts, agenda, semana] = await Promise.all([
         supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
         supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
         supabase.from("rotas").select("*").order("nome", { ascending:true }),
         supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
+        supabase.from("agenda").select("*").gte("data", weekStart).lte("data", weekEnd),
       ]);
       const err = pdvs.error || vis.error || rts.error;
       if (err) { setErro(err.message); return; }
@@ -53,6 +64,7 @@ export default function AdminView({ onLogout }) {
       setVisitas(vis.data||[]);
       setRotas(rts.data||[]);
       setAgendaHoje(agenda.data||[]);
+      setAgendaSemana(semana.data||[]);
     } catch(e) {
       setErro(e.message||"Erro ao carregar dados.");
     }
@@ -86,6 +98,9 @@ export default function AdminView({ onLogout }) {
       .on("postgres_changes", { event:"*", schema:"public", table:"agenda" }, () => {
         supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true })
           .then(({ data }) => setAgendaHoje(data||[]));
+        const [weekStart, weekEnd] = getWeekRange();
+        supabase.from("agenda").select("*").gte("data", weekStart).lte("data", weekEnd)
+          .then(({ data }) => setAgendaSemana(data||[]));
         const { year, month } = agendaViewRef.current;
         const first = toDateStr(year, month, 1);
         const last  = toDateStr(year, month, daysInMonth(year, month));
@@ -304,22 +319,55 @@ export default function AdminView({ onLogout }) {
             </div>
           )}
 
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
-            {[
-              { label:"Total de PDVs",   val:stores.length,                                                                   icon:"ti-building-store", iconBg:"#eff6ff",  iconColor:C.blue  },
-              { label:"Visitas hoje",    val:visitas.filter(v=>v.data===TODAY).length,                                        icon:"ti-circle-check",  iconBg:C.greenDim, iconColor:C.green },
-              { label:"Esta semana",     val:visitas.filter(v=>{ const d=daysSince(v.data); return d!==null&&d<=6; }).length, icon:"ti-calendar-week", iconBg:C.amberDim, iconColor:C.amber },
-              { label:"Nunca visitados", val:stores.filter(s=>!s.visita).length,                                              icon:"ti-alert-triangle",iconBg:C.redDim,   iconColor:C.red   },
-            ].map(({ label, val, icon, iconBg, iconColor })=>(
-              <div key={label} style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"16px 14px" }}>
-                <div style={{ width:38, height:38, borderRadius:12, background:iconBg, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
-                  <i className={`ti ${icon}`} style={{ fontSize:20, color:iconColor }} />
+          {(() => {
+            const rotasSemana = new Set(agendaSemana.map(a => a.rota_id));
+            const pdvsSemana  = stores.filter(s => rotasSemana.has(s.rotaId));
+            const urgentes    = stores.filter(s => getUrgencia(s.visita) === "critica").length;
+            const progresso   = pdvsHoje.length > 0 ? visitadosHoje / pdvsHoje.length : 0;
+            return (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+                {/* PDVs hoje */}
+                <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"16px 14px" }}>
+                  <div style={{ width:38, height:38, borderRadius:12, background:"#eff6ff", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                    <i className="ti ti-building-store" style={{ fontSize:20, color:C.blue }} />
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700, color:C.text, fontVariantNumeric:"tabular-nums" }}>{pdvsHoje.length}</div>
+                  <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>PDVs hoje</div>
                 </div>
-                <div style={{ fontSize:22, fontWeight:700, color:C.text, fontVariantNumeric:"tabular-nums" }}>{val}</div>
-                <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>{label}</div>
+                {/* Visitados hoje */}
+                <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"16px 14px" }}>
+                  <div style={{ width:38, height:38, borderRadius:12, background:C.greenDim, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                    <i className="ti ti-circle-check" style={{ fontSize:20, color:C.green }} />
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700, color:C.text, fontVariantNumeric:"tabular-nums" }}>
+                    {visitadosHoje}<span style={{ fontSize:13, color:C.gray, fontWeight:500 }}>/{pdvsHoje.length}</span>
+                  </div>
+                  <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>Visitados hoje</div>
+                  {pdvsHoje.length > 0 && (
+                    <div style={{ height:4, background:C.border, borderRadius:99, overflow:"hidden", marginTop:8 }}>
+                      <div style={{ height:"100%", width:`${progresso*100}%`, background:C.green, borderRadius:99, transition:"width 0.4s" }} />
+                    </div>
+                  )}
+                </div>
+                {/* PDVs da semana */}
+                <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"16px 14px" }}>
+                  <div style={{ width:38, height:38, borderRadius:12, background:C.amberDim, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                    <i className="ti ti-calendar-week" style={{ fontSize:20, color:C.amber }} />
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700, color:C.text, fontVariantNumeric:"tabular-nums" }}>{pdvsSemana.length}</div>
+                  <div style={{ fontSize:10, color:C.gray, marginTop:3, fontWeight:500 }}>PDVs da semana</div>
+                </div>
+                {/* Urgentes */}
+                <div style={{ background:urgentes>0?C.redDim:C.white, border:`1px solid ${urgentes>0?C.red:C.border}`, borderRadius:16, padding:"16px 14px" }}>
+                  <div style={{ width:38, height:38, borderRadius:12, background:urgentes>0?"#fecaca":"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                    <i className="ti ti-alert-triangle" style={{ fontSize:20, color:urgentes>0?C.red:C.gray }} />
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700, color:urgentes>0?C.red:C.text, fontVariantNumeric:"tabular-nums" }}>{urgentes}</div>
+                  <div style={{ fontSize:10, color:urgentes>0?"#991b1b":C.gray, marginTop:3, fontWeight:500 }}>Urgentes (30+ dias)</div>
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {pdvsHoje.length>0&&(
             <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px" }}>
