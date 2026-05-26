@@ -371,6 +371,32 @@ export default function AdminView({ onLogout }) {
           })()}
 
           {(() => {
+            const vendendo = stores.filter(s => s.vendeu).length;
+            const total    = stores.length;
+            const pct      = total > 0 ? Math.round((vendendo / total) * 100) : 0;
+            return (
+              <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ width:32, height:32, borderRadius:10, background:C.greenDim, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <i className="ti ti-bolt" style={{ fontSize:17, color:C.green }} />
+                    </div>
+                    <span style={{ fontSize:11, color:C.muted, fontWeight:700, letterSpacing:"0.06em" }}>VENDE DOT ENERGY</span>
+                  </div>
+                  <span style={{ fontSize:20, fontWeight:700, color:C.green }}>{pct}%</span>
+                </div>
+                <div style={{ height:6, background:C.border, borderRadius:99, overflow:"hidden", marginBottom:8 }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:C.green, borderRadius:99, transition:"width 0.4s" }} />
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.gray }}>
+                  <span><span style={{ color:C.green, fontWeight:600 }}>{vendendo}</span> já vendem</span>
+                  <span><span style={{ color:C.red, fontWeight:600 }}>{total - vendendo}</span> ainda não</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {(() => {
             const semRota = stores.filter(s => !s.rotaId);
             if (semRota.length === 0) return null;
             const visiveis = semRota.slice(0, 5);
