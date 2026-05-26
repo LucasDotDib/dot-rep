@@ -1,10 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtCep, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
 const FONT = "'Poppins', sans-serif";
 const URG_ORDER = { critica:0, media:1, ok:2 };
 const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
+
+const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+const padZ = n => String(n).padStart(2, "0");
+const toDateStr = (y, m, d) => `${y}-${padZ(m)}-${padZ(d)}`;
+const WEEKDAY = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 function Tag({ children, bg="#f5f6fa", color="#6b7280" }) {
   return <span style={{ fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:99, background:bg, color, whiteSpace:"nowrap" }}>{children}</span>;
@@ -168,6 +174,12 @@ export default function RepView({ onLogout }) {
   const [marcObs,    setMarcObs]    = useState("");
   const [okCollapsed, setOkCollapsed] = useState({});
 
+  const now = new Date();
+  const [agendaYear,  setAgendaYear]  = useState(now.getFullYear());
+  const [agendaMonth, setAgendaMonth] = useState(now.getMonth() + 1);
+  const [agendaMes,   setAgendaMes]   = useState([]);
+  const agendaViewRef = useRef({ year: now.getFullYear(), month: now.getMonth() + 1 });
+
   const carregar = useCallback(async () => {
     const [pdvs, rts, agenda, vis] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
@@ -187,6 +199,15 @@ export default function RepView({ onLogout }) {
     setHistorico(hist);
   }, []);
 
+  const carregarAgenda = useCallback(async (year, month) => {
+    const first = toDateStr(year, month, 1);
+    const last  = toDateStr(year, month, daysInMonth(year, month));
+    const { data } = await supabase.from("agenda").select("*")
+      .gte("data", first).lte("data", last)
+      .order("data", { ascending:true }).order("ordem", { ascending:true });
+    setAgendaMes(data||[]);
+  }, []);
+
   useEffect(() => {
     carregar();
     const ch = supabase.channel("rep-changes")
@@ -203,6 +224,12 @@ export default function RepView({ onLogout }) {
       .on("postgres_changes", { event:"*", schema:"public", table:"agenda" }, () => {
         supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true })
           .then(({ data }) => setAgendaHoje(data||[]));
+        const { year, month } = agendaViewRef.current;
+        const first = toDateStr(year, month, 1);
+        const last  = toDateStr(year, month, daysInMonth(year, month));
+        supabase.from("agenda").select("*").gte("data", first).lte("data", last)
+          .order("data", { ascending:true }).order("ordem", { ascending:true })
+          .then(({ data }) => setAgendaMes(data||[]));
       })
       .on("postgres_changes", { event:"*", schema:"public", table:"visitas" }, ({ eventType, new:n }) => {
         if (eventType==="INSERT" && n)
@@ -214,6 +241,11 @@ export default function RepView({ onLogout }) {
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [carregar]);
+
+  useEffect(() => {
+    agendaViewRef.current = { year: agendaYear, month: agendaMonth };
+    if (aba === "agenda") carregarAgenda(agendaYear, agendaMonth);
+  }, [aba, agendaYear, agendaMonth, carregarAgenda]);
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
@@ -323,10 +355,20 @@ export default function RepView({ onLogout }) {
     marcandoId, setMarcandoId, marcObs, setMarcObs, historico,
   };
 
+  const prevMonth = () => {
+    if (agendaMonth === 1) { setAgendaYear(y=>y-1); setAgendaMonth(12); }
+    else setAgendaMonth(m=>m-1);
+  };
+  const nextMonth = () => {
+    if (agendaMonth === 12) { setAgendaYear(y=>y+1); setAgendaMonth(1); }
+    else setAgendaMonth(m=>m+1);
+  };
+
   const NAV_TABS = [
-    ["hoje",  "ti-target",      "Hoje" ],
-    ["todos", "ti-layout-list", "Todos"],
-    ["rotas", "ti-map-pin",     "Rotas"],
+    ["hoje",   "ti-target",         "Hoje"  ],
+    ["todos",  "ti-layout-list",    "Todos" ],
+    ["rotas",  "ti-map-pin",        "Rotas" ],
+    ["agenda", "ti-calendar-month", "Agenda"],
   ];
 
   return (
@@ -563,6 +605,69 @@ export default function RepView({ onLogout }) {
                     <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
                   </div>
                   {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ABA AGENDA ── */}
+      {aba==="agenda"&&(
+        <div style={{ padding:"16px 16px 0" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={prevMonth}>‹</Btn>
+            <div style={{ flex:1, textAlign:"center" }}>
+              <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{MONTHS_PT[agendaMonth-1]}</div>
+              <div style={{ fontSize:12, color:C.gray }}>{agendaYear}</div>
+            </div>
+            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={nextMonth}>›</Btn>
+          </div>
+
+          {agendaMes.length === 0 && (
+            <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>
+              Nenhuma rota definida para este mês.
+            </div>
+          )}
+
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {Array.from({ length: daysInMonth(agendaYear, agendaMonth) }, (_,i) => i+1).map(dia => {
+              const dateStr = toDateStr(agendaYear, agendaMonth, dia);
+              const items   = agendaMes.filter(a => a.data === dateStr).sort((a,b) => a.ordem-b.ordem);
+              if (items.length === 0) return null;
+              const weekday = WEEKDAY[new Date(dateStr+"T12:00:00").getDay()];
+              const isToday = dateStr === TODAY;
+              const isPast  = dateStr < TODAY;
+              return (
+                <div key={dia} style={{
+                  background: C.white,
+                  border: `1px solid ${isToday ? C.blue : C.border}`,
+                  borderLeft: `3px solid ${isToday ? C.blue : C.yellow}`,
+                  borderRadius:14, padding:"12px 14px",
+                  opacity: isPast && !isToday ? 0.55 : 1,
+                }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ minWidth:38, textAlign:"center", flexShrink:0 }}>
+                      <div style={{ fontSize:18, fontWeight:700, color: isToday ? C.blue : C.text, lineHeight:1 }}>{padZ(dia)}</div>
+                      <div style={{ fontSize:10, color: isToday ? C.blue : C.gray, fontWeight:600, marginTop:2 }}>{weekday}</div>
+                      {isToday && <div style={{ fontSize:9, color:C.blue, fontWeight:700, letterSpacing:"0.04em", marginTop:2 }}>HOJE</div>}
+                    </div>
+                    <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
+                      {items.map((item, idx) => {
+                        const rota = rotas.find(r => r.id === item.rota_id);
+                        const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
+                        return (
+                          <div key={item.id} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            {items.length > 1 && (
+                              <span style={{ fontSize:10, fontWeight:700, color:C.muted, minWidth:12 }}>{idx+1}.</span>
+                            )}
+                            <span style={{ fontSize:13, fontWeight:600, color:C.text }}>📍 {rota?.nome||"—"}</span>
+                            <span style={{ fontSize:11, color:C.gray }}>· {pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               );
             })}
