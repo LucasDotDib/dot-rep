@@ -172,7 +172,8 @@ export default function RepView({ onLogout }) {
   const [obs,        setObs]        = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs,    setMarcObs]    = useState("");
-  const [okCollapsed, setOkCollapsed] = useState({});
+  const [okCollapsed,   setOkCollapsed]   = useState({});
+  const [selectedRota,  setSelectedRota]  = useState(null);
 
   const now = new Date();
   const [agendaYear,  setAgendaYear]  = useState(now.getFullYear());
@@ -596,15 +597,50 @@ export default function RepView({ onLogout }) {
             {rotas.length===0 ? (
               <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
             ) : rotas.map(r=>{
-              const qtd = stores.filter(s=>s.rotaId===r.id).length;
-              const isHoje = agendaHoje.some(a => a.rota_id === r.id);
+              const pdvsRota = stores.filter(s=>s.rotaId===r.id).sort(cepCmp);
+              const isHoje   = agendaHoje.some(a => a.rota_id === r.id);
+              const isOpen   = selectedRota === r.id;
               return (
-                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div>
-                    <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
-                    <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
+                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, overflow:"hidden" }}>
+                  <div
+                    onClick={()=>setSelectedRota(isOpen?null:r.id)}
+                    style={{ padding:"14px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                  >
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
+                      <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
+                      <span style={{ fontSize:14, color:C.gray }}>{isOpen?"▲":"▼"}</span>
+                    </div>
                   </div>
-                  {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
+                  {isOpen&&(
+                    <div style={{ borderTop:`1px solid ${C.border}`, padding:"10px 16px 14px" }}>
+                      {pdvsRota.length===0 ? (
+                        <div style={{ fontSize:13, color:C.gray, textAlign:"center", padding:"10px 0" }}>Nenhum PDV nesta rota.</div>
+                      ) : (
+                        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                          {pdvsRota.map(s=>{
+                            const cfg = URGENCIA[getUrgencia(s.visita)];
+                            const d   = s.visita ? daysSince(s.visita) : null;
+                            return (
+                              <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", background:C.grayDim, borderRadius:10, borderLeft:`3px solid ${cfg.barColor}` }}>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.nome}</div>
+                                  {s.end&&<div style={{ fontSize:11, color:C.gray, marginTop:1 }}>{s.end}</div>}
+                                </div>
+                                <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
+                                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:99, background:cfg.badgeBg, color:cfg.badgeText }}>{cfg.label}</span>
+                                  <div style={{ fontSize:10, color:C.gray, marginTop:3 }}>{d===null?"nunca":d===0?"hoje":`${d}d atrás`}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -29,6 +29,7 @@ export default function AdminView({ onLogout }) {
   const [novaRota,       setNovaRota]       = useState("");
   const [editRota,       setEditRota]       = useState(null);
   const [confirmDelRota, setConfirmDelRota] = useState(null);
+  const [selectedRota,   setSelectedRota]   = useState(null);
 
   const [selectedDate, setSelectedDate] = useState(TODAY);
 
@@ -498,38 +499,84 @@ export default function AdminView({ onLogout }) {
             {rotas.length===0 ? (
               <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota criada ainda.</div>
             ) : rotas.map(r=>{
-              const qtd = stores.filter(s=>s.rotaId===r.id).length;
-              const isHoje = agendaHoje.some(a => a.rota_id === r.id);
+              const pdvsRota   = stores.filter(s=>s.rotaId===r.id).sort(cepCmp);
+              const isHoje     = agendaHoje.some(a => a.rota_id === r.id);
               const isEditingR = editRota?.id===r.id;
-              const isDelR = confirmDelRota===r.id;
+              const isDelR     = confirmDelRota===r.id;
+              const isOpen     = selectedRota===r.id;
               return (
-                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, padding:"14px 16px" }}>
+                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, overflow:"hidden" }}>
                   {isEditingR ? (
-                    <div style={{ display:"flex", gap:7 }}>
+                    <div style={{ padding:"14px 16px", display:"flex", gap:7 }}>
                       <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus />
                       <Btn variant="yellow" style={{padding:"11px 14px",fontSize:12}} onClick={()=>renomearRota(r.id,editRota.nome)}>OK</Btn>
                       <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12}} onClick={()=>setEditRota(null)}>✕</Btn>
                     </div>
                   ) : (
                     <>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                      <div
+                        onClick={()=>setSelectedRota(isOpen?null:r.id)}
+                        style={{ padding:"14px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                      >
                         <div>
                           <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
-                          <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{qtd} PDV{qtd!==1?"s":""}</div>
+                          <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</div>
                         </div>
-                        {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
+                          <span style={{ fontSize:14, color:C.gray }}>{isOpen?"▲":"▼"}</span>
+                        </div>
                       </div>
-                      <div style={{ display:"flex", gap:7 }}>
-                        <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️ Renomear</Btn>
-                        {isDelR ? (
-                          <>
-                            <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
-                            <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
-                          </>
-                        ) : (
-                          <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
-                        )}
-                      </div>
+                      {isOpen&&(
+                        <div style={{ borderTop:`1px solid ${C.border}`, padding:"10px 16px 14px" }}>
+                          {pdvsRota.length===0 ? (
+                            <div style={{ fontSize:13, color:C.gray, textAlign:"center", padding:"10px 0" }}>Nenhum PDV nesta rota.</div>
+                          ) : (
+                            <div style={{ display:"flex", flexDirection:"column", gap:7, marginBottom:12 }}>
+                              {pdvsRota.map(s=>{
+                                const cfg = URGENCIA[getUrgencia(s.visita)];
+                                const d   = s.visita ? daysSince(s.visita) : null;
+                                return (
+                                  <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", background:C.grayDim, borderRadius:10, borderLeft:`3px solid ${cfg.barColor}` }}>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.nome}</div>
+                                      {s.end&&<div style={{ fontSize:11, color:C.gray, marginTop:1 }}>{s.end}</div>}
+                                    </div>
+                                    <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
+                                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:99, background:cfg.badgeBg, color:cfg.badgeText }}>{cfg.label}</span>
+                                      <div style={{ fontSize:10, color:C.gray, marginTop:3 }}>{d===null?"nunca":d===0?"hoje":`${d}d atrás`}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div style={{ display:"flex", gap:7 }}>
+                            <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={e=>{e.stopPropagation();setEditRota({id:r.id,nome:r.nome});}}>✏️ Renomear</Btn>
+                            {isDelR ? (
+                              <>
+                                <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
+                                <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
+                              </>
+                            ) : (
+                              <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={e=>{e.stopPropagation();setConfirmDelRota(r.id);}}>🗑</Btn>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {!isOpen&&(
+                        <div style={{ padding:"0 16px 14px", display:"flex", gap:7 }}>
+                          <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️ Renomear</Btn>
+                          {isDelR ? (
+                            <>
+                              <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
+                              <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
+                            </>
+                          ) : (
+                            <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
