@@ -370,7 +370,7 @@ export default function AdminView({ onLogout }) {
           })()}
 
           {pdvsHoje.length>0&&(
-            <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px" }}>
+            <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
               <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:10 }}>PENDENTES DE HOJE</div>
               {pdvsHoje.filter(s=>daysSince(s.visita)!==0).length===0 ? (
                 <div style={{ textAlign:"center", padding:"8px 0", color:C.green, fontSize:13, fontWeight:600 }}>🎉 Todos visitados hoje!</div>
@@ -382,6 +382,32 @@ export default function AdminView({ onLogout }) {
               ))}
             </div>
           )}
+
+          {(() => {
+            const obsRecentes = visitas
+              .filter(v => v.obs && v.obs.trim())
+              .slice(0, 30);
+            if (obsRecentes.length === 0) return null;
+            return (
+              <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
+                <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:12 }}>OBSERVAÇÕES RECENTES</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {obsRecentes.map(v => {
+                    const pdv = stores.find(s => s.id === v.pdv_id);
+                    return (
+                      <div key={v.id} style={{ borderLeft:`3px solid ${C.blueDim}`, paddingLeft:12 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{pdv?.nome||"PDV removido"}</span>
+                          <span style={{ fontSize:11, color:C.gray, flexShrink:0, marginLeft:8, fontFamily:"monospace" }}>{fmtDate(v.data)}</span>
+                        </div>
+                        <p style={{ margin:0, fontSize:12, color:C.muted, lineHeight:1.5, fontStyle:"italic" }}>"{v.obs}"</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
