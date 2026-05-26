@@ -369,6 +369,34 @@ export default function AdminView({ onLogout }) {
             );
           })()}
 
+          {(() => {
+            const semRota = stores.filter(s => !s.rotaId);
+            if (semRota.length === 0) return null;
+            const visiveis = semRota.slice(0, 5);
+            const extras   = semRota.length - visiveis.length;
+            return (
+              <div style={{ background:"#fffbeb", border:`1px solid #fde68a`, borderLeft:`3px solid ${C.amber}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                  <i className="ti ti-alert-circle" style={{ fontSize:16, color:C.amber, flexShrink:0 }} />
+                  <span style={{ fontSize:11, color:"#92400e", fontWeight:700, letterSpacing:"0.06em" }}>
+                    {semRota.length} PDV{semRota.length!==1?"S":""} SEM ROTA
+                  </span>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {visiveis.map(s => (
+                    <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13, color:C.text }}>
+                      <span style={{ fontWeight:500 }}>{s.nome}</span>
+                      <span style={{ fontSize:11, color:C.gray }}>{s.visita ? `${daysSince(s.visita)}d atrás` : "nunca visitado"}</span>
+                    </div>
+                  ))}
+                  {extras > 0 && (
+                    <span style={{ fontSize:12, color:C.amber, fontWeight:600 }}>+ {extras} mais — veja na aba PDVs</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {pdvsHoje.length>0&&(
             <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
               <div style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:"0.06em", marginBottom:10 }}>PENDENTES DE HOJE</div>
