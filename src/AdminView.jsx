@@ -53,12 +53,21 @@ export default function AdminView({ onLogout }) {
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
+    const newId = Date.now().toString();
     const { error } = await supabase.from("pdvs").insert([{
-      id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
+      id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:form.rotaId||null,
     }]);
-    if (error) setErro(error.message); else setShowAdd(false);
+    if (error) { setErro(error.message); }
+    else {
+      setShowAdd(false);
+      setStores(prev => [...prev, {
+        id:newId, nome:form.nome.trim(), end:form.end.trim(),
+        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prio:0,
+        vendeu:false, visita:null, obs:"", rotaId:form.rotaId||null,
+      }]);
+    }
     setSaving(false);
   }, []);
 
@@ -68,32 +77,56 @@ export default function AdminView({ onLogout }) {
       nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
     }).eq("id", id);
-    if (error) setErro(error.message); else setEditingPdv(null);
+    if (error) { setErro(error.message); }
+    else {
+      setEditingPdv(null);
+      setStores(prev => prev.map(s => s.id===id ? {
+        ...s, nome:form.nome.trim(), end:form.end.trim(),
+        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rotaId:form.rotaId,
+      } : s));
+    }
     setSaving(false);
   }, []);
 
   const adicionarRota = useCallback(async () => {
     if (!novaRota.trim()) return;
-    const { error } = await supabase.from("rotas").insert([{ id:Date.now().toString(), nome:novaRota.trim() }]);
-    if (error) setErro(error.message); else setNovaRota("");
+    const newId = Date.now().toString();
+    const nome = novaRota.trim();
+    const { error } = await supabase.from("rotas").insert([{ id:newId, nome }]);
+    if (error) { setErro(error.message); }
+    else {
+      setNovaRota("");
+      setRotas(prev => [...prev, { id:newId, nome }].sort((a,b)=>a.nome.localeCompare(b.nome)));
+    }
   }, [novaRota]);
 
   const renomearRota = useCallback(async (id, nome) => {
     if (!nome.trim()) return;
     const { error } = await supabase.from("rotas").update({ nome:nome.trim() }).eq("id", id);
-    if (error) setErro(error.message); else setEditRota(null);
+    if (error) { setErro(error.message); }
+    else {
+      setEditRota(null);
+      setRotas(prev => prev.map(r => r.id===id ? {...r, nome:nome.trim()} : r));
+    }
   }, []);
 
   const removerRota = useCallback(async (id) => {
     await supabase.from("pdvs").update({ rota_id:null }).eq("rota_id", id);
     if (rotaAtiva===id) await supabase.from("rota_ativa").update({ rota_id:null }).eq("id", 1);
     const { error } = await supabase.from("rotas").delete().eq("id", id);
-    if (error) setErro(error.message); else setConfirmDelRota(null);
+    if (error) { setErro(error.message); }
+    else {
+      setConfirmDelRota(null);
+      setRotas(prev => prev.filter(r => r.id!==id));
+      setStores(prev => prev.map(s => s.rotaId===id ? {...s, rotaId:null} : s));
+      if (rotaAtiva===id) setRotaAtiva(null);
+    }
   }, [rotaAtiva]);
 
   const ativarRota = useCallback(async (id) => {
     const { error } = await supabase.from("rota_ativa").update({ rota_id:id, ativada_em:new Date().toISOString() }).eq("id", 1);
-    if (error) setErro(error.message);
+    if (error) { setErro(error.message); }
+    else { setRotaAtiva(id); }
   }, []);
 
   if (!stores) return (

@@ -201,12 +201,21 @@ export default function RepView({ onLogout }) {
   const adicionar = useCallback(async (form) => {
     setSaving(true);
     const rotaFinal = form.rotaId || (aba==="hoje"&&rotaAtiva?rotaAtiva:null);
+    const newId = Date.now().toString();
     const { error } = await supabase.from("pdvs").insert([{
-      id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
+      id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal,
     }]);
-    if (error) setErro(error.message); else setShowAdd(false);
+    if (error) { setErro(error.message); }
+    else {
+      setShowAdd(false);
+      setStores(prev => [...prev, {
+        id:newId, nome:form.nome.trim(), end:form.end.trim(),
+        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prio:0,
+        vendeu:false, visita:null, obs:"", rotaId:rotaFinal,
+      }]);
+    }
     setSaving(false);
   }, [aba, rotaAtiva]);
 
@@ -216,20 +225,35 @@ export default function RepView({ onLogout }) {
       nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rota_id:form.rotaId,
     }).eq("id", id);
-    if (error) setErro(error.message); else setEditing(null);
+    if (error) { setErro(error.message); }
+    else {
+      setEditing(null);
+      setStores(prev => prev.map(s => s.id===id ? {
+        ...s, nome:form.nome.trim(), end:form.end.trim(),
+        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, rotaId:form.rotaId,
+      } : s));
+    }
     setSaving(false);
   }, []);
 
   const atualizar = useCallback(async (id, campos) => {
+    const DB_CLIENT = { ultima_visita:"visita", vendeu_dot:"vendeu", endereco:"end", rota_id:"rotaId", prioridade:"prio" };
+    const local = Object.fromEntries(Object.entries(campos).map(([k,v]) => [DB_CLIENT[k]||k, v]));
+    setStores(prev => prev.map(s => s.id===id ? {...s, ...local} : s));
     const { error } = await supabase.from("pdvs").update(campos).eq("id", id);
     if (error) setErro(error.message);
   }, []);
 
   const marcar = useCallback(async (id, obsText) => {
     setMarcandoId(null); setMarcObs("");
+    const visitaId = Date.now().toString();
+    setHistorico(prev => ({
+      ...prev,
+      [id]: [{ id:visitaId, data:TODAY, obs:obsText||"" }, ...(prev[id]||[])],
+    }));
     await Promise.all([
       atualizar(id, { ultima_visita:TODAY }),
-      supabase.from("visitas").insert([{ id:Date.now().toString(), pdv_id:id, data:TODAY, obs:obsText||"" }]),
+      supabase.from("visitas").insert([{ id:visitaId, pdv_id:id, data:TODAY, obs:obsText||"" }]),
     ]);
     setFlash(id); setTimeout(()=>setFlash(null), 2000);
   }, [atualizar]);
@@ -243,7 +267,11 @@ export default function RepView({ onLogout }) {
 
   const remover = useCallback(async (id) => {
     const { error } = await supabase.from("pdvs").delete().eq("id", id);
-    if (error) setErro(error.message); else { setExpanded(null); setConfirmDel(null); }
+    if (error) { setErro(error.message); }
+    else {
+      setExpanded(null); setConfirmDel(null);
+      setStores(prev => prev.filter(s => s.id!==id));
+    }
   }, []);
 
   if (!stores) return (
