@@ -1,47 +1,48 @@
 import { useState } from "react";
 
 export const C = {
-  bg:        "#f8f9fc",
+  bg:        "#f0f2f7",
   white:     "#ffffff",
   surface:   "#ffffff",
   surface2:  "#f8f9fc",
-  border:    "#f0f1f6",
+  border:    "#e8eaef",
   blue:      "#1b3a8c",
-  blueDim:   "#eff6ff",
+  blue2:     "#2d52b8",
+  blueDim:   "#eef1fa",
   yellow:    "#f5c800",
-  yellowDim: "#fffbeb",
+  yellowDim: "#fefbe8",
   green:     "#16a34a",
-  greenDim:  "#f0fdf4",
+  greenDim:  "#dcfce7",
   amber:     "#d97706",
-  amberDim:  "#fffbeb",
-  red:       "#ef4444",
-  redDim:    "#fef2f2",
-  text:      "#111827",
+  amberDim:  "#fef3c7",
+  red:       "#dc2626",
+  redDim:    "#fee2e2",
+  text:      "#0f1729",
   muted:     "#6b7280",
-  gray:      "#b0b7c3",
-  grayDim:   "#f5f6fa",
-  nav:       "#1a1f36",
+  gray:      "#9ca3af",
+  grayDim:   "#f3f4f6",
+  nav:       "#0f1729",
 };
 
 export const ipt = {
   width:"100%", boxSizing:"border-box",
-  background:"#f8f9fc", border:"1px solid #f0f1f6", borderRadius:10,
-  padding:"12px 14px", fontSize:14, color:"#111827",
-  fontFamily:"'Poppins', sans-serif", outline:"none",
+  background:"#f8f9fc", border:"1px solid #e8eaef", borderRadius:11,
+  padding:"13px 14px", fontSize:14, color:"#0f1729",
+  fontFamily:"'Plus Jakarta Sans', sans-serif", outline:"none",
 };
-export const iptErr = { ...ipt, border:"1px solid #fca5a5" };
+export const iptErr = { ...ipt, border:"1px solid #dc262688" };
 
 export function Btn({ variant="default", style={}, ...props }) {
   const base = {
-    cursor:"pointer", borderRadius:10, fontSize:13, fontWeight:600,
-    letterSpacing:"0.01em", fontFamily:"'Poppins', sans-serif",
+    cursor:"pointer", borderRadius:11, fontSize:13, fontWeight:600,
+    letterSpacing:"0.01em", fontFamily:"'Plus Jakarta Sans', sans-serif",
   };
   const variants = {
     yellow:  { background:"#f5c800", color:"#111827", border:"none" },
-    ghost:   { background:"#f5f6fa", color:"#6b7280", border:"none" },
-    green:   { background:"#f0fdf4", color:"#16a34a", border:"1px solid #bbf7d0" },
-    danger:  { background:"#fef2f2", color:"#ef4444", border:"1px solid #fecaca" },
-    default: { background:"#f5f6fa", color:"#374151", border:"1px solid #f0f1f6" },
+    ghost:   { background:"#f3f4f6", color:"#6b7280", border:"1px solid #e8eaef" },
+    green:   { background:"#dcfce7", color:"#16a34a", border:"1px solid #bbf7d0" },
+    danger:  { background:"#fee2e2", color:"#dc2626", border:"1px solid #fca5a5" },
+    default: { background:"#f3f4f6", color:"#374151", border:"1px solid #e8eaef" },
     blue:    { background:"#1b3a8c", color:"#ffffff", border:"none" },
   };
   return <button style={{ ...base, ...variants[variant], ...style }} {...props} />;
@@ -52,9 +53,9 @@ export const daysSince    = d  => !d ? null : Math.floor((new Date(TODAY) - new 
 export const visitStatus  = d  => { if (!d) return "nunca"; const n=daysSince(d); if(n===0) return "ok"; if(n<=14) return "recente"; return "atrasado"; };
 export const getUrgencia  = visita => { if (!visita) return "critica"; const d=daysSince(visita); return d>=30?"critica":d>=15?"media":"ok"; };
 export const URGENCIA = {
-  critica: { label:"URGENTE",  barColor:"#ef4444", badgeBg:"#fef2f2", badgeText:"#991b1b" },
-  media:   { label:"PENDENTE", barColor:"#f5c800", badgeBg:"#fffbeb", badgeText:"#92400e" },
-  ok:      { label:"EM DIA",   barColor:"#16a34a", badgeBg:"#f0fdf4", badgeText:"#166534" },
+  critica: { label:"URGENTE",  barColor:"#dc2626", badgeBg:"#fee2e2", badgeText:"#991b1b" },
+  media:   { label:"PENDENTE", barColor:"#d97706", badgeBg:"#fef3c7", badgeText:"#92400e" },
+  ok:      { label:"EM DIA",   barColor:"#16a34a", badgeBg:"#dcfce7", badgeText:"#166534" },
 };
 export const fmtDate      = d  => !d ? null : new Date(d+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
 export const fmtTime      = ts => !ts ? "" : new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});

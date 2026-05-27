@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtTime, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
-const FONT = "'Poppins', sans-serif";
+const FONT = "'Plus Jakarta Sans', sans-serif";
 const URG_ORDER = { critica:0, media:1, ok:2 };
 const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
 
@@ -270,21 +270,21 @@ export default function AdminView({ onLogout }) {
     <div style={{ fontFamily:FONT, background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:90 }}>
 
       {/* HEADER */}
-      <div style={{ background:C.white, borderBottom:`1px solid #f5f6fa`, padding:"18px 20px 14px", position:"sticky", top:0, zIndex:10 }}>
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`, padding:"14px 20px", position:"sticky", top:0, zIndex:10 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <span style={{ fontSize:18 }}>⚡</span>
+          <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+            <div style={{ width:38, height:38, borderRadius:12, background:`linear-gradient(135deg,${C.blue},${C.blue2})`, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(27,58,140,.28)", flexShrink:0 }}>
+              <i className="ti ti-bolt" style={{ fontSize:20, color:C.yellow }} />
             </div>
             <div>
-              <div style={{ fontSize:10, color:C.blue, fontWeight:700, letterSpacing:"0.1em" }}>DOT ENERGY · ADMIN</div>
-              <div style={{ fontSize:17, fontWeight:700, color:C.text, lineHeight:1.1 }}>Dashboard</div>
+              <div style={{ fontSize:10, color:C.muted, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", lineHeight:1 }}>Dot Energy · Admin</div>
+              <div style={{ fontSize:17, fontWeight:800, color:C.text, lineHeight:1.2, letterSpacing:"-.02em" }}>Dashboard</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:7, alignItems:"center" }}>
             {aba==="pdvs"&&(
-              <Btn variant={showAdd?"danger":"yellow"} style={{padding:"8px 14px",fontSize:12}} onClick={()=>setShowAdd(v=>!v)}>
-                {showAdd?"✕":"+ PDV"}
+              <Btn variant={showAdd?"danger":"blue"} style={{padding:"8px 14px",fontSize:12,display:"flex",alignItems:"center",gap:5}} onClick={()=>setShowAdd(v=>!v)}>
+                {showAdd ? <><i className="ti ti-x" style={{fontSize:13}}/> Fechar</> : <><i className="ti ti-plus" style={{fontSize:13}}/> PDV</>}
               </Btn>
             )}
             <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", padding:6 }}>
@@ -303,21 +303,39 @@ export default function AdminView({ onLogout }) {
                 const rota = rotas.find(r => r.id === item.rota_id);
                 const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
                 const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
+                const total = pdvsRota.length;
+                const criticos = pdvsRota.filter(s => getUrgencia(s.visita)==="critica").length;
+                const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media").length;
+                const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok").length;
                 return (
-                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px" }}>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
-                      {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
-                    </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                      <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>📍 {rota?.nome||"—"}</div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontSize:22, fontWeight:700, color:C.yellow }}>{pdvsRota.length>0?Math.round((visitados/pdvsRota.length)*100):0}%</div>
+                  <div key={item.id} style={{ background:`linear-gradient(135deg,${C.blue} 0%,${C.blue2} 100%)`, borderRadius:20, padding:"20px", boxShadow:"0 6px 28px rgba(27,58,140,.28)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", marginBottom:4 }}>
+                          {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
+                        </div>
+                        <div style={{ fontSize:18, fontWeight:800, color:"#fff", letterSpacing:"-.02em", display:"flex", alignItems:"center", gap:7 }}>
+                          <i className="ti ti-map-pin" style={{ fontSize:16, color:C.yellow, flexShrink:0 }} />
+                          {rota?.nome||"—"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:"2rem", fontWeight:800, color:C.yellow, lineHeight:1, letterSpacing:"-.04em", fontVariantNumeric:"tabular-nums" }}>
+                          {visitados}<span style={{ fontSize:"1rem", opacity:.5, fontWeight:600 }}>/{total}</span>
+                        </div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.35)", letterSpacing:".1em", textTransform:"uppercase", marginTop:2 }}>Visitados</div>
                       </div>
                     </div>
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginBottom:8 }}>{visitados} de {pdvsRota.length} visitados</div>
-                    {pdvsRota.length>0&&(
-                      <div style={{ height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${(visitados/pdvsRota.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                    {total>0&&(
+                      <div style={{ height:6, background:"rgba(255,255,255,.15)", borderRadius:99, overflow:"hidden", marginBottom:8 }}>
+                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.5s cubic-bezier(.4,0,.2,1)" }} />
+                      </div>
+                    )}
+                    {total>0&&(
+                      <div style={{ display:"flex", gap:14, fontSize:11, fontWeight:600 }}>
+                        {criticos>0 && <span style={{ color:"#fca5a5" }}>{criticos} urgentes</span>}
+                        {medios>0   && <span style={{ color:"#fde68a" }}>{medios} pendentes</span>}
+                        {oks>0      && <span style={{ color:"#86efac" }}>{oks} em dia</span>}
                       </div>
                     )}
                   </div>
@@ -432,7 +450,7 @@ export default function AdminView({ onLogout }) {
                     return (
                       <div key={rotaId}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-                          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>📍 {rota?.nome||"—"}</span>
+                          <span style={{ fontSize:13, fontWeight:600, color:C.text, display:"flex", alignItems:"center", gap:5 }}><i className="ti ti-map-pin" style={{fontSize:13,color:C.blue}}/>{rota?.nome||"—"}</span>
                           <span style={{ fontSize:12, fontWeight:700, color }}>{completos}/{total} · {pct}%</span>
                         </div>
                         <div style={{ height:5, background:C.border, borderRadius:99, overflow:"hidden" }}>
@@ -660,8 +678,8 @@ export default function AdminView({ onLogout }) {
                         ) : (
                           <>
                             <div style={{ paddingTop:12 }}>
-                              <Btn variant="default" style={{ width:"100%", padding:"9px 0", fontSize:12, marginBottom:10 }} onClick={()=>setEditingPdv(s.id)}>
-                                ✏️ Editar dados / rota
+                              <Btn variant="default" style={{ width:"100%", padding:"9px 0", fontSize:12, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }} onClick={()=>setEditingPdv(s.id)}>
+                                <i className="ti ti-pencil" style={{ fontSize:13 }} /> Editar dados / rota
                               </Btn>
                             </div>
                             {s.obs&&(
@@ -721,7 +739,9 @@ export default function AdminView({ onLogout }) {
                     <div style={{ padding:"14px 16px", display:"flex", gap:7 }}>
                       <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus />
                       <Btn variant="yellow" style={{padding:"11px 14px",fontSize:12}} onClick={()=>renomearRota(r.id,editRota.nome)}>OK</Btn>
-                      <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12}} onClick={()=>setEditRota(null)}>✕</Btn>
+                      <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12,display:"flex",alignItems:"center"}} onClick={()=>setEditRota(null)}>
+                        <i className="ti ti-x" style={{fontSize:13}}/>
+                      </Btn>
                     </div>
                   ) : (
                     <>
@@ -730,7 +750,7 @@ export default function AdminView({ onLogout }) {
                         style={{ padding:"14px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
                       >
                         <div>
-                          <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
+                          <div style={{ fontSize:15, fontWeight:600, color:C.text, display:"flex", alignItems:"center", gap:6 }}><i className="ti ti-map-pin" style={{fontSize:14,color:C.blue}}/>{r.nome}</div>
                           <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</div>
                         </div>
                         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -763,28 +783,40 @@ export default function AdminView({ onLogout }) {
                             </div>
                           )}
                           <div style={{ display:"flex", gap:7 }}>
-                            <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={e=>{e.stopPropagation();setEditRota({id:r.id,nome:r.nome});}}>✏️ Renomear</Btn>
+                            <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:5}} onClick={e=>{e.stopPropagation();setEditRota({id:r.id,nome:r.nome});}}>
+                              <i className="ti ti-pencil" style={{fontSize:13}}/> Renomear
+                            </Btn>
                             {isDelR ? (
                               <>
                                 <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
-                                <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
+                                <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>
+                                  <i className="ti ti-x" style={{fontSize:13}}/>
+                                </Btn>
                               </>
                             ) : (
-                              <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={e=>{e.stopPropagation();setConfirmDelRota(r.id);}}>🗑</Btn>
+                              <Btn variant="danger" style={{padding:"10px 12px",fontSize:12,display:"flex",alignItems:"center"}} onClick={e=>{e.stopPropagation();setConfirmDelRota(r.id);}}>
+                                <i className="ti ti-trash" style={{fontSize:14}}/>
+                              </Btn>
                             )}
                           </div>
                         </div>
                       )}
                       {!isOpen&&(
                         <div style={{ padding:"0 16px 14px", display:"flex", gap:7 }}>
-                          <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️ Renomear</Btn>
+                          <Btn variant="ghost" style={{flex:1,padding:"10px 0",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:5}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>
+                            <i className="ti ti-pencil" style={{fontSize:13}}/> Renomear
+                          </Btn>
                           {isDelR ? (
                             <>
                               <Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
-                              <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn>
+                              <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>
+                                <i className="ti ti-x" style={{fontSize:13}}/>
+                              </Btn>
                             </>
                           ) : (
-                            <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
+                            <Btn variant="danger" style={{padding:"10px 12px",fontSize:12,display:"flex",alignItems:"center"}} onClick={()=>setConfirmDelRota(r.id)}>
+                              <i className="ti ti-trash" style={{fontSize:14}}/>
+                            </Btn>
                           )}
                         </div>
                       )}

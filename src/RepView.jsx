@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtCep, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
 
-const FONT = "'Poppins', sans-serif";
+const FONT = "'Plus Jakarta Sans', sans-serif";
 const URG_ORDER = { critica:0, media:1, ok:2 };
 const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
 
@@ -20,10 +20,13 @@ function SectionHead({ icon, label, count, color, bg, collapsible, collapsed, on
   return (
     <div
       onClick={collapsible ? onToggle : undefined}
-      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 12px", background:bg, borderRadius:10, marginBottom:8, cursor:collapsible?"pointer":undefined }}
+      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:bg, borderRadius:10, marginBottom:8, cursor:collapsible?"pointer":undefined }}
     >
-      <span style={{ fontSize:12, fontWeight:700, color, letterSpacing:"0.04em" }}>{icon} {label} ({count})</span>
-      {collapsible && <span style={{ fontSize:12, color }}>{collapsed ? "›" : "↓"}</span>}
+      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+        <i className={`ti ${icon}`} style={{ fontSize:14, color }} />
+        <span style={{ fontSize:12, fontWeight:700, color, letterSpacing:"0.04em" }}>{label} ({count})</span>
+      </div>
+      {collapsible && <i className={`ti ${collapsed?"ti-chevron-right":"ti-chevron-down"}`} style={{ fontSize:14, color }} />}
     </div>
   );
 }
@@ -40,14 +43,14 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
   const hist = historico[s.id]||[];
 
   return (
-    <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, overflow:"hidden" }}>
+    <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, overflow:"hidden", boxShadow:"0 2px 14px rgba(15,23,41,.06)" }}>
       <div style={{ padding:"14px 14px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:15, fontWeight:600, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{s.end}{cepFmt ? ` · ${cepFmt}` : ""}</div>
           </div>
-          <span style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99, flexShrink:0, background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.04em" }}>{cfg.label}</span>
+          <span style={{ fontSize:10, fontWeight:800, padding:"4px 10px", borderRadius:99, flexShrink:0, background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.06em" }}>{cfg.label}</span>
         </div>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, marginBottom:2 }}>
           <Tag>{TIPO_LABEL[s.tipo]}</Tag>
@@ -84,16 +87,18 @@ function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpan
           <>
             <Btn
               variant={isFlash||isVisitedToday ? "green" : "yellow"}
-              style={{flex:1, padding:"11px 0", borderRadius:10, fontWeight:700, cursor:isVisitedToday?"default":"pointer", opacity:isVisitedToday?0.7:1}}
+              style={{flex:1, padding:"11px 0", borderRadius:11, fontWeight:700, cursor:isVisitedToday?"default":"pointer", opacity:isVisitedToday?0.7:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6}}
               onClick={()=>!isVisitedToday&&setMarcandoId(s.id)}
             >
-              {isFlash ? "✓ Registrado!" : isVisitedToday ? "✓ Visitado hoje" : "Marcar visita"}
+              <i className={`ti ${isFlash||isVisitedToday?"ti-check":"ti-map-pin"}`} style={{ fontSize:14 }} />
+              {isFlash ? "Registrado!" : isVisitedToday ? "Visitado hoje" : "Marcar visita"}
             </Btn>
-            <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
-              {s.vendeu?"Dot ✓":"+ Dot"}
+            <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12,display:"flex",alignItems:"center",gap:4}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
+              <i className={`ti ${s.vendeu?"ti-check":"ti-bolt"}`} style={{ fontSize:13 }} />
+              {s.vendeu?"Dot":"+ Dot"}
             </Btn>
-            <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 10px",fontSize:13}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
-              {isExp?"▲":"▼"}
+            <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 12px"}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
+              <i className={`ti ${isExp?"ti-chevron-up":"ti-chevron-down"}`} style={{ fontSize:16, color:C.gray }} />
             </Btn>
           </>
         )}
@@ -381,21 +386,21 @@ export default function RepView({ onLogout }) {
     <div style={{ fontFamily:FONT, background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:90 }}>
 
       {/* HEADER */}
-      <div style={{ background:C.white, borderBottom:`1px solid #f5f6fa`, padding:"18px 20px 14px", position:"sticky", top:0, zIndex:10 }}>
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`, padding:"14px 20px", position:"sticky", top:0, zIndex:10 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <span style={{ fontSize:18 }}>⚡</span>
+          <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+            <div style={{ width:38, height:38, borderRadius:12, background:`linear-gradient(135deg,${C.blue},${C.blue2})`, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(27,58,140,.28)", flexShrink:0 }}>
+              <i className="ti ti-bolt" style={{ fontSize:20, color:C.yellow }} />
             </div>
             <div>
-              <div style={{ fontSize:10, color:C.blue, fontWeight:700, letterSpacing:"0.1em" }}>DOT ENERGY</div>
-              <div style={{ fontSize:17, fontWeight:700, color:C.text, lineHeight:1.1 }}>Rota PDV</div>
+              <div style={{ fontSize:10, color:C.muted, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", lineHeight:1 }}>Dot Energy</div>
+              <div style={{ fontSize:17, fontWeight:800, color:C.text, lineHeight:1.2, letterSpacing:"-.02em" }}>Rota PDV</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:7, alignItems:"center" }}>
             {aba!=="rotas"&&(
-              <Btn variant={showAdd?"danger":"yellow"} style={{padding:"8px 14px",fontSize:12}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
-                {showAdd?"✕":"+ PDV"}
+              <Btn variant={showAdd?"danger":"blue"} style={{padding:"8px 14px",fontSize:12,display:"flex",alignItems:"center",gap:5}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
+                {showAdd ? <><i className="ti ti-x" style={{fontSize:13}}/> Fechar</> : <><i className="ti ti-plus" style={{fontSize:13}}/> PDV</>}
               </Btn>
             )}
             <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", padding:6 }}>
@@ -428,26 +433,31 @@ export default function RepView({ onLogout }) {
                 const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media").length;
                 const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok").length;
                 return (
-                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px", marginBottom:10 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div key={item.id} style={{ background:`linear-gradient(135deg,${C.blue} 0%,${C.blue2} 100%)`, borderRadius:20, padding:"20px", marginBottom:10, boxShadow:"0 6px 28px rgba(27,58,140,.28)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
                       <div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", marginBottom:4 }}>
                           {agendaHoje.length > 1 ? `ROTA ${item.ordem}` : "ROTA ATIVA"}
                         </div>
-                        <div style={{ fontSize:19, fontWeight:700, color:"#ffffff" }}>📍 {rota?.nome||"—"}</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:"#fff", letterSpacing:"-.02em", display:"flex", alignItems:"center", gap:7 }}>
+                          <i className="ti ti-map-pin" style={{ fontSize:16, color:C.yellow, flexShrink:0 }} />
+                          {rota?.nome||"—"}
+                        </div>
                       </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontSize:26, fontWeight:700, color:C.yellow, fontVariantNumeric:"tabular-nums" }}>{visitados}/{total}</div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.06em" }}>VISITADOS</div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:"2rem", fontWeight:800, color:C.yellow, lineHeight:1, letterSpacing:"-.04em", fontVariantNumeric:"tabular-nums" }}>
+                          {visitados}<span style={{ fontSize:"1rem", opacity:.5, fontWeight:600 }}>/{total}</span>
+                        </div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.35)", letterSpacing:".1em", textTransform:"uppercase", marginTop:2 }}>Visitados</div>
                       </div>
                     </div>
                     {total>0&&(
-                      <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                      <div style={{ height:6, background:"rgba(255,255,255,.15)", borderRadius:99, overflow:"hidden", marginBottom:8 }}>
+                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.5s cubic-bezier(.4,0,.2,1)" }} />
                       </div>
                     )}
                     {total>0&&(
-                      <div style={{ display:"flex", gap:12, marginTop:10, fontSize:11, fontWeight:700 }}>
+                      <div style={{ display:"flex", gap:14, fontSize:11, fontWeight:600 }}>
                         {criticos>0 && <span style={{ color:"#fca5a5" }}>{criticos} urgentes</span>}
                         {medios>0   && <span style={{ color:"#fde68a" }}>{medios} pendentes</span>}
                         {oks>0      && <span style={{ color:"#86efac" }}>{oks} em dia</span>}
@@ -496,7 +506,7 @@ export default function RepView({ onLogout }) {
                     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                       {criticos.length>0&&(
                         <div>
-                          <SectionHead icon="🔴" label="Urgente" count={criticos.length} color="#991b1b" bg="#fef2f2" />
+                          <SectionHead icon="ti-alert-circle" label="Urgente" count={criticos.length} color="#991b1b" bg="#fef2f2" />
                           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                             {criticos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
                           </div>
@@ -504,7 +514,7 @@ export default function RepView({ onLogout }) {
                       )}
                       {medios.length>0&&(
                         <div>
-                          <SectionHead icon="🟡" label="Pendentes" count={medios.length} color="#92400e" bg="#fffbeb" />
+                          <SectionHead icon="ti-clock" label="Pendentes" count={medios.length} color="#92400e" bg="#fffbeb" />
                           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                             {medios.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
                           </div>
@@ -513,7 +523,7 @@ export default function RepView({ onLogout }) {
                       {oks.length>0&&(
                         <div>
                           <SectionHead
-                            icon="✅" label="Em dia" count={oks.length}
+                            icon="ti-circle-check" label="Em dia" count={oks.length}
                             color="#166534" bg="#f0fdf4"
                             collapsible collapsed={isOkColl}
                             onToggle={()=>setOkCollapsed(prev=>({...prev,[item.rota_id]:!isOkColl}))}
@@ -581,16 +591,29 @@ export default function RepView({ onLogout }) {
                 const rota = rotas.find(r => r.id === item.rota_id);
                 const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
                 const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
+                const total = pdvsRota.length;
                 return (
-                  <div key={item.id} style={{ background:C.blue, borderRadius:20, padding:"18px 20px" }}>
-                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:"0.1em", marginBottom:4 }}>
-                      {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
+                  <div key={item.id} style={{ background:`linear-gradient(135deg,${C.blue} 0%,${C.blue2} 100%)`, borderRadius:20, padding:"20px", boxShadow:"0 6px 28px rgba(27,58,140,.28)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", marginBottom:4 }}>
+                          {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
+                        </div>
+                        <div style={{ fontSize:18, fontWeight:800, color:"#fff", letterSpacing:"-.02em", display:"flex", alignItems:"center", gap:7 }}>
+                          <i className="ti ti-map-pin" style={{ fontSize:16, color:C.yellow, flexShrink:0 }} />
+                          {rota?.nome||"—"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:"2rem", fontWeight:800, color:C.yellow, lineHeight:1, letterSpacing:"-.04em", fontVariantNumeric:"tabular-nums" }}>
+                          {visitados}<span style={{ fontSize:"1rem", opacity:.5, fontWeight:600 }}>/{total}</span>
+                        </div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,.35)", letterSpacing:".1em", textTransform:"uppercase", marginTop:2 }}>Visitados</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize:19, fontWeight:700, color:"#fff", marginBottom:6 }}>📍 {rota?.nome||"—"}</div>
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{pdvsRota.length} PDVs · {visitados} visitados</div>
-                    {pdvsRota.length>0&&(
-                      <div style={{ marginTop:12, height:5, background:"rgba(255,255,255,0.15)", borderRadius:99, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${(visitados/pdvsRota.length)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.4s" }} />
+                    {total>0&&(
+                      <div style={{ height:6, background:"rgba(255,255,255,.15)", borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.5s cubic-bezier(.4,0,.2,1)" }} />
                       </div>
                     )}
                   </div>
