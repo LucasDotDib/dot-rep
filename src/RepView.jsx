@@ -204,7 +204,7 @@ export default function RepView({ onLogout }) {
       const hist = {};
       for (const v of (vis.data||[])) {
         if (!hist[v.pdv_id]) hist[v.pdv_id] = [];
-        hist[v.pdv_id].push({ id:v.id, data:v.data, obs:v.obs||"" });
+        hist[v.pdv_id].push({ id:v.id, data:(v.data||"").slice(0,10), obs:v.obs||"" });
       }
       setHistorico(hist);
     } catch(e) {
@@ -248,7 +248,7 @@ export default function RepView({ onLogout }) {
         if (eventType==="INSERT" && n)
           setHistorico(prev => ({
             ...prev,
-            [n.pdv_id]: [{ id:n.id, data:n.data, obs:n.obs||"" }, ...(prev[n.pdv_id]||[])],
+            [n.pdv_id]: [{ id:n.id, data:(n.data||"").slice(0,10), obs:n.obs||"" }, ...(prev[n.pdv_id]||[])],
           }));
       })
       .subscribe();

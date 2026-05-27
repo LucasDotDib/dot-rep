@@ -243,7 +243,7 @@ export default function AdminView({ onLogout }) {
     visitasPorPdv[v.pdv_id].push(v);
   }
 
-  const visitasDoDia    = visitas.filter(v=>v.data===selectedDate);
+  const visitasDoDia    = visitas.filter(v=>(v.data||"").slice(0,10)===selectedDate);
   const visitasDoDiaIds = new Set(visitasDoDia.map(v=>v.pdv_id));
 
   const prevDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split("T")[0]); };
@@ -431,7 +431,7 @@ export default function AdminView({ onLogout }) {
             const mesStart = toDateStr(now.getFullYear(), now.getMonth()+1, 1);
             const contadorVisitas = {};
             visitas
-              .filter(v => v.data >= mesStart && v.data <= TODAY)
+              .filter(v => (v.data||"").slice(0,10) >= mesStart && (v.data||"").slice(0,10) <= TODAY)
               .forEach(v => { contadorVisitas[v.pdv_id] = (contadorVisitas[v.pdv_id]||0) + 1; });
             return (
               <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:16, padding:"14px 16px", marginBottom:16 }}>
@@ -861,7 +861,7 @@ export default function AdminView({ onLogout }) {
                 if ((isPast || isToday) && items.length > 0) {
                   const rotaIds    = new Set(items.map(i => i.rota_id));
                   const pdvsDia    = stores.filter(s => rotaIds.has(s.rotaId));
-                  const visitadosDia = new Set(visitas.filter(v => v.data === dateStr).map(v => v.pdv_id));
+                  const visitadosDia = new Set(visitas.filter(v => (v.data||"").slice(0,10) === dateStr).map(v => v.pdv_id));
                   const nVisitados = pdvsDia.filter(s => visitadosDia.has(s.id)).length;
                   const nTotal     = pdvsDia.length;
                   if (nTotal > 0) {
