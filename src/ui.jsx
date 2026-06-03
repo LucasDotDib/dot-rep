@@ -87,13 +87,13 @@ export function BottomNav({ aba, setAba, tabs }) {
         boxShadow:"0 4px 24px rgba(0,0,0,0.18)",
       }}>
         {tabs.map(([v, icon, label]) => (
-          <button key={v} onClick={()=>setAba(v)} title={label} style={{
-            flex:1, padding:"11px 0", cursor:"pointer",
+          <button key={v} onClick={()=>setAba(v)} style={{
+            flex:1, padding:"10px 0", cursor:"pointer",
             borderRadius:99, border:"none", fontFamily:"inherit",
             background:aba===v?"#ffffff":"transparent",
             color:aba===v?C.nav:"#9ca3af",
-            fontSize:18, transition:"all 0.2s",
-          }}>{icon}</button>
+            fontSize:11, fontWeight:aba===v?700:500, transition:"all 0.2s",
+          }}>{label}</button>
         ))}
       </div>
     </div>
