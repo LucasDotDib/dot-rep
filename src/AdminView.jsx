@@ -109,7 +109,7 @@ export default function AdminView({ onLogout }) {
   const prevDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split("T")[0]); };
   const nextDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split("T")[0]); };
 
-  const TABS = [["geral","📊","Geral"],["historico","📅","Dia"],["pdvs","🏪","PDVs"],["rotas","📍","Rotas"],["pendentes","⚠️","Pend."],["consig","📦","Consig."]];
+  const TABS = [["geral","ti-chart-bar","Geral"],["historico","ti-calendar","Dia"],["pdvs","ti-building-store","PDVs"],["rotas","ti-map-pin","Rotas"],["pendentes","ti-alert-circle","Pend."],["consig","ti-package","Consig."]];
 
   return (
     <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
@@ -161,10 +161,10 @@ export default function AdminView({ onLogout }) {
 
           {/* Stats grid */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-            <StatCard icon="🏪" value={stores.length} label="Total de PDVs" bg={C.blueDim} color={C.blue} />
-            <StatCard icon="✅" value={visitas.filter(v=>v.data===TODAY).length} label="Visitas hoje" bg={C.greenDim} color={C.green} />
-            <StatCard icon="📅" value={visitas.filter(v=>{const d=daysSince(v.data);return d!==null&&d<=6;}).length} label="Esta semana" bg={C.amberDim} color={C.amber} />
-            <StatCard icon="⚠️" value={stores.filter(s=>!s.visita).length} label="Nunca visitados" bg={C.redDim} color={C.red} />
+            <StatCard iconClass="ti-building-store" iconColor="#2563eb" iconBg="#eff6ff" value={stores.length} label="Total de PDVs" />
+            <StatCard iconClass="ti-circle-check" iconColor="#16a34a" iconBg="#f0fdf4" value={visitas.filter(v=>v.data===TODAY).length} label="Visitas hoje" />
+            <StatCard iconClass="ti-calendar-week" iconColor="#d97706" iconBg="#fffbeb" value={visitas.filter(v=>{const d=daysSince(v.data);return d!==null&&d<=6;}).length} label="Esta semana" />
+            <StatCard iconClass="ti-alert-triangle" iconColor="#dc2626" iconBg="#fef2f2" value={stores.filter(s=>!s.visita).length} label="Nunca visitados" />
           </div>
 
           {/* Pendentes da rota */}

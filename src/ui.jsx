@@ -88,27 +88,31 @@ export function BottomNav({ aba, setAba, tabs }) {
       }}>
         {tabs.map(([v, icon, label]) => (
           <button key={v} onClick={()=>setAba(v)} title={label} style={{
-            flex:1, padding:"11px 0", cursor:"pointer",
+            flex:1, padding:"9px 0", cursor:"pointer",
             borderRadius:99, border:"none", fontFamily:"inherit",
             background:aba===v?"#ffffff":"transparent",
-            color:aba===v?C.nav:"#9ca3af",
-            fontSize:18, transition:"all 0.2s",
-          }}>{icon}</button>
+            color:aba===v?C.nav:"#6b7280",
+            transition:"all 0.2s",
+          }}>
+            <i className={`ti ${icon}`} style={{ fontSize:20, display:"block" }} />
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
-// Colored stat card with icon circle
-export function StatCard({ icon, value, label, bg, color }) {
+// Colored stat card with icon square
+export function StatCard({ iconClass, iconColor, iconBg, value, label }) {
   return (
     <div style={{ ...card, padding:"14px" }}>
       <div style={{
-        width:42, height:42, borderRadius:14,
-        background:bg, display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:20, marginBottom:10,
-      }}>{icon}</div>
+        width:38, height:38, borderRadius:11,
+        background:iconBg, display:"flex", alignItems:"center", justifyContent:"center",
+        marginBottom:10,
+      }}>
+        <i className={`ti ${iconClass}`} style={{ fontSize:20, color:iconColor }} />
+      </div>
       <div style={{ fontSize:26, fontWeight:700, color:C.text, lineHeight:1 }}>{value}</div>
       <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{label}</div>
     </div>

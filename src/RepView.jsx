@@ -137,7 +137,7 @@ export default function RepView({ onLogout }) {
   };
 
   const pendRota = totalRota - visitadosRota;
-  const TABS = [["hoje","🎯","Hoje"],["todos","⊞","Todos"],["rotas","◎","Rotas"],["consig","📦","Consig."]];
+  const TABS = [["hoje","ti-target","Hoje"],["todos","ti-layout-list","Todos"],["rotas","ti-map-pin","Rotas"],["consig","ti-package","Consig."]];
 
   return (
     <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
