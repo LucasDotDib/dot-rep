@@ -21,18 +21,21 @@ export default function RepView({ onLogout }) {
   const [obs, setObs]             = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs, setMarcObs]     = useState("");
+  const [rotaAgenda, setRotaAgenda] = useState(null);
 
   const carregar = useCallback(async () => {
-    const [pdvs, rts, ativa, vis] = await Promise.all([
+    const [pdvs, rts, ativa, vis, ag] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em",{ascending:true}),
       supabase.from("rotas").select("*").order("nome",{ascending:true}),
       supabase.from("rota_ativa").select("*").eq("id",1).single(),
       supabase.from("visitas").select("*").order("criado_em",{ascending:false}),
+      supabase.from("agenda").select("*").eq("data",TODAY).maybeSingle(),
     ]);
     if (pdvs.error) { setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setRotas(rts.data||[]);
     setRotaAtiva(ativa.data?.rota_id||null);
+    setRotaAgenda(ag.data||null);
     const hist={};
     for (const v of (vis.data||[])) { if(!hist[v.pdv_id])hist[v.pdv_id]=[]; hist[v.pdv_id].push({id:v.id,data:v.data,obs:v.obs||""}); }
     setHistorico(hist);
@@ -45,27 +48,31 @@ export default function RepView({ onLogout }) {
       .on("postgres_changes",{event:"*",schema:"public",table:"rotas"},()=>carregar())
       .on("postgres_changes",{event:"*",schema:"public",table:"rota_ativa"},()=>carregar())
       .on("postgres_changes",{event:"*",schema:"public",table:"visitas"},()=>carregar())
+      .on("postgres_changes",{event:"*",schema:"public",table:"agenda"},()=>carregar())
       .subscribe();
     return ()=>supabase.removeChannel(ch);
   }, [carregar]);
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
-    const rotaFinal = form.rotaId||(aba==="hoje"&&rotaAtiva?rotaAtiva:null);
+    const rotaEfetivaId = rotaAgenda?.rota_id || rotaAtiva;
+    const rotaFinal = form.rotaId||(aba==="hoje"&&rotaEfetivaId?rotaEfetivaId:null);
     const { error } = await supabase.from("pdvs").insert([{
       id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal,
+      comprador: form.comprador||"",
     }]);
     if(error) setErro(error.message); else setShowAdd(false);
     setSaving(false);
-  }, [aba, rotaAtiva]);
+  }, [aba, rotaAtiva, rotaAgenda]);
 
   const editar = useCallback(async (id, form) => {
     setSaving(true);
     const { error } = await supabase.from("pdvs").update({
       nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId,
+      comprador: form.comprador||"",
     }).eq("id",id);
     if(error) setErro(error.message); else setEditing(null);
     setSaving(false);
@@ -109,10 +116,13 @@ export default function RepView({ onLogout }) {
     </div>
   );
 
-  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
-  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
-  const totalRota     = pdvsRotaAtiva.length;
-  const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+  const rotaAtivaObj   = rotas.find(r=>r.id===rotaAtiva);
+  const rotaEfetiva    = rotaAgenda?.rota_id || rotaAtiva;
+  const rotaEfetivaObj = rotas.find(r=>r.id===rotaEfetiva);
+  const pdvsRotaAtiva  = stores.filter(s=>s.rotaId===rotaEfetiva);
+  const fromAgenda     = !!rotaAgenda?.rota_id;
+  const totalRota      = pdvsRotaAtiva.length;
+  const visitadosRota  = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
 
   const listaTodos = stores
     .filter(s=>{
@@ -166,7 +176,7 @@ export default function RepView({ onLogout }) {
       {/* ABA HOJE */}
       {aba==="hoje"&&(
         <div style={{ padding:"1rem" }}>
-          {!rotaAtiva ? (
+          {!rotaEfetiva ? (
             <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
               <div style={{ fontSize:48, marginBottom:16 }}>🎯</div>
               <h2 style={{ margin:"0 0 8px", fontSize:20, fontWeight:700, color:C.text }}>Nenhuma rota ativa</h2>
@@ -179,8 +189,8 @@ export default function RepView({ onLogout }) {
               <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"18px 20px", marginBottom:14, color:"#fff" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                   <div>
-                    <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>ROTA ATIVA</p>
-                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📍 {rotaAtivaObj?.nome||"—"}</p>
+                    <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
+                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📍 {rotaEfetivaObj?.nome||"—"}</p>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <p style={{ margin:0, fontSize:32, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?"#a7f3d0":"#f5c800" }}>
@@ -200,17 +210,17 @@ export default function RepView({ onLogout }) {
               {showAdd&&(
                 <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
                   <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>
-                    Novo PDV {rotaAtivaObj?`· ${rotaAtivaObj.nome}`:""}
+                    Novo PDV {rotaEfetivaObj?`· ${rotaEfetivaObj.nome}`:""}
                   </p>
-                  <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:rotaAtiva}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+                  <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:rotaEfetiva,comprador:""}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
                 </div>
               )}
 
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {listaHoje.length===0 ? (
                   <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
-                    <div style={{ fontSize:36, marginBottom:10 }}>📍</div>
-                    <p style={{ color:C.muted, fontSize:14 }}>Nenhum PDV nesta rota ainda.</p>
+                    <i className="ti ti-map-pin" style={{fontSize:48,color:"#d1d5db"}}/>
+                    <p style={{ color:C.muted, fontSize:14, marginTop:10 }}>Nenhum PDV nesta rota ainda.</p>
                   </div>
                 ) : listaHoje.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
               </div>
@@ -231,7 +241,7 @@ export default function RepView({ onLogout }) {
           {showAdd&&(
             <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
               <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Novo PDV</p>
-              <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:null}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+              <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:null,comprador:""}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
           <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)}
@@ -261,8 +271,8 @@ export default function RepView({ onLogout }) {
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {listaTodos.length===0&&stores.length===0&&(
               <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
-                <div style={{ fontSize:48, marginBottom:14 }}>📍</div>
-                <h2 style={{ margin:"0 0 8px", fontSize:18, fontWeight:700, color:C.text }}>Nenhum PDV ainda</h2>
+                <i className="ti ti-map-pin" style={{fontSize:48,color:"#d1d5db"}}/>
+                <h2 style={{ margin:"14px 0 8px", fontSize:18, fontWeight:700, color:C.text }}>Nenhum PDV ainda</h2>
                 <p style={{ margin:0, color:C.muted, fontSize:14 }}>Toque em <strong>+ PDV</strong> para adicionar.</p>
               </div>
             )}
@@ -323,8 +333,8 @@ export default function RepView({ onLogout }) {
                 </div>
                 {consignados.length===0 ? (
                   <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
-                    <div style={{ fontSize:48, marginBottom:14 }}>📦</div>
-                    <h2 style={{ margin:"0 0 8px", fontSize:18, fontWeight:700, color:"#111827" }}>Nenhum consignado</h2>
+                    <i className="ti ti-package" style={{fontSize:48,color:"#d1d5db"}}/>
+                    <h2 style={{ margin:"14px 0 8px", fontSize:18, fontWeight:700, color:"#111827" }}>Nenhum consignado</h2>
                     <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Toque em 📦 em qualquer PDV para marcar que deixou um display.</p>
                   </div>
                 ) : (

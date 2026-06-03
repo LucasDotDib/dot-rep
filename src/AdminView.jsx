@@ -18,19 +18,28 @@ export default function AdminView({ onLogout }) {
   const [confirmDelRota, setConfirmDelRota] = useState(null);
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [confirmDelPdv, setConfirmDelPdv] = useState(null);
+  const [agenda, setAgenda]           = useState([]);
+  const [calYear, setCalYear]         = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth]       = useState(new Date().getMonth());
+  const [diaAberto, setDiaAberto]     = useState(null);
+  const [rotaParaDia, setRotaParaDia] = useState("");
+  const [savingAgenda, setSavingAgenda] = useState(false);
+  const [filterPdv, setFilterPdv]     = useState("todos");
 
   const carregar = useCallback(async () => {
-    const [pdvs, vis, rts, ativa] = await Promise.all([
+    const [pdvs, vis, rts, ativa, ag] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em",{ascending:true}),
       supabase.from("visitas").select("*").order("criado_em",{ascending:false}),
       supabase.from("rotas").select("*").order("nome",{ascending:true}),
       supabase.from("rota_ativa").select("*").eq("id",1).single(),
+      supabase.from("agenda").select("*"),
     ]);
     if(pdvs.error){ setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setVisitas(vis.data||[]);
     setRotas(rts.data||[]);
     setRotaAtiva(ativa.data?.rota_id||null);
+    setAgenda(ag.data||[]);
   }, []);
 
   useEffect(() => {
@@ -40,6 +49,7 @@ export default function AdminView({ onLogout }) {
       .on("postgres_changes",{event:"*",schema:"public",table:"visitas"},()=>carregar())
       .on("postgres_changes",{event:"*",schema:"public",table:"rotas"},()=>carregar())
       .on("postgres_changes",{event:"*",schema:"public",table:"rota_ativa"},()=>carregar())
+      .on("postgres_changes",{event:"*",schema:"public",table:"agenda"},()=>carregar())
       .subscribe();
     return ()=>supabase.removeChannel(ch);
   }, [carregar]);
@@ -50,6 +60,7 @@ export default function AdminView({ onLogout }) {
       id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
       cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:form.rotaId||null,
+      comprador: form.comprador||"",
     }]);
     if(error) setErro(error.message); else setShowAdd(false);
     setSaving(false);
@@ -84,6 +95,20 @@ export default function AdminView({ onLogout }) {
     if(error) setErro(error.message);
   }, []);
 
+  const salvarAgenda = useCallback(async (data, rotaId) => {
+    setSavingAgenda(true);
+    const existing = agenda.find(a => a.data === data);
+    if (existing) {
+      if (rotaId) await supabase.from("agenda").update({rota_id:rotaId}).eq("data",data);
+      else await supabase.from("agenda").delete().eq("data",data);
+    } else if (rotaId) {
+      await supabase.from("agenda").insert([{id:Date.now().toString(),data,rota_id:rotaId,ordem:0}]);
+    }
+    setSavingAgenda(false);
+    setDiaAberto(null);
+    await carregar();
+  }, [agenda, carregar]);
+
   if (!stores) return (
     <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
       <div style={{ width:28, height:28, border:"3px solid #eaecf0", borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
@@ -109,7 +134,15 @@ export default function AdminView({ onLogout }) {
   const prevDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()-1); setSelectedDate(d.toISOString().split("T")[0]); };
   const nextDay = () => { const d=new Date(selectedDate+"T12:00:00"); d.setDate(d.getDate()+1); setSelectedDate(d.toISOString().split("T")[0]); };
 
-  const TABS = [["geral","ti-chart-bar","Geral"],["historico","ti-calendar","Dia"],["pdvs","ti-building-store","PDVs"],["rotas","ti-map-pin","Rotas"],["pendentes","ti-alert-circle","Pend."],["consig","ti-package","Consig."]];
+  const TABS = [
+    ["geral","ti-chart-bar","Geral"],
+    ["historico","ti-calendar","Dia"],
+    ["pdvs","ti-building-store","PDVs"],
+    ["rotas","ti-map-pin","Rotas"],
+    ["pendentes","ti-alert-circle","Pend."],
+    ["consig","ti-package","Consig."],
+    ["agenda","ti-calendar-month","Agenda"],
+  ];
 
   return (
     <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
@@ -144,7 +177,7 @@ export default function AdminView({ onLogout }) {
             {rotaAtivaObj ? (
               <>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📍 {rotaAtivaObj.nome}</p>
+                  <p style={{ margin:0, fontSize:16, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📍 {rotaAtivaObj.nome}</p>
                   <p style={{ margin:0, fontSize:28, fontWeight:700, color:visitadosHoje===pdvsRotaAtiva.length&&pdvsRotaAtiva.length>0?"#a7f3d0":"#f5c800" }}>
                     {pdvsRotaAtiva.length>0?Math.round((visitadosHoje/pdvsRotaAtiva.length)*100):0}%
                   </p>
@@ -166,6 +199,62 @@ export default function AdminView({ onLogout }) {
             <StatCard iconClass="ti-calendar-week" iconColor="#d97706" iconBg="#fffbeb" value={visitas.filter(v=>{const d=daysSince(v.data);return d!==null&&d<=6;}).length} label="Esta semana" />
             <StatCard iconClass="ti-alert-triangle" iconColor="#dc2626" iconBg="#fef2f2" value={stores.filter(s=>!s.visita).length} label="Nunca visitados" />
           </div>
+
+          {/* Consignados sem retorno */}
+          {(() => {
+            const urgentes = stores.filter(s => s.consignado && (s.visita===null || daysSince(s.visita)>14));
+            if (!urgentes.length) return null;
+            return (
+              <div style={{background:C.white,borderRadius:16,padding:14,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #fca5a5"}}>
+                <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:C.red,textTransform:"uppercase",letterSpacing:"0.06em"}}>⚠️ Consignados sem retorno</p>
+                {urgentes.map(s => {
+                  const d = s.visita ? daysSince(s.visita) : null;
+                  return (
+                    <div key={s.id} style={{padding:"9px 0",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between"}}>
+                      <div>
+                        <p style={{margin:"0 0 2px",fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>{s.nome.toLowerCase()}</p>
+                        <p style={{margin:0,fontSize:11,color:C.muted}}>{s.end}</p>
+                      </div>
+                      <span style={{fontSize:12,fontWeight:700,color:C.red,flexShrink:0,marginLeft:8}}>{d!=null?`${d}d`:"nunca"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Weekly visits chart */}
+          {(() => {
+            const today = new Date(TODAY+"T12:00:00");
+            const dow = today.getDay();
+            const mondayOff = dow===0?-6:1-dow;
+            const weekDays = Array(7).fill(null).map((_,i)=>{
+              const d=new Date(today); d.setDate(d.getDate()+mondayOff+i); return d.toISOString().split("T")[0];
+            });
+            const DAY_LABELS = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+            const counts = weekDays.map(d=>visitas.filter(v=>v.data===d).length);
+            const maxC = Math.max(...counts,1);
+            return (
+              <div style={{background:C.white,borderRadius:16,padding:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",marginBottom:16}}>
+                <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>Visitas esta semana</p>
+                <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                  {weekDays.map((d,i)=>{
+                    const isT=d===TODAY, cnt=counts[i];
+                    const h=Math.round((cnt/maxC)*60);
+                    return (
+                      <div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                        <span style={{fontSize:10,fontWeight:700,color:isT?C.amber:C.muted,minHeight:14}}>{cnt>0?cnt:""}</span>
+                        <div style={{width:"100%",height:60,display:"flex",alignItems:"flex-end"}}>
+                          <div style={{width:"100%",height:h||3,borderRadius:4,background:isT?C.yellow:C.blue,minHeight:3}}/>
+                        </div>
+                        <span style={{fontSize:9,color:isT?C.text:C.muted,fontWeight:isT?700:400}}>{DAY_LABELS[i]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Pendentes da rota */}
           {rotaAtivaObj&&pdvsRotaAtiva.length>0&&(
@@ -198,8 +287,8 @@ export default function AdminView({ onLogout }) {
           )}
           {visitasDoDia.length===0 ? (
             <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
-              <div style={{ fontSize:36, marginBottom:10 }}>📋</div>
-              <p style={{ color:C.muted, fontSize:14 }}>Nenhuma visita em {fmtDate(selectedDate)||selectedDate}.</p>
+              <i className="ti ti-clipboard" style={{fontSize:48,color:"#d1d5db"}}/>
+              <p style={{ color:C.muted, fontSize:14, marginTop:10 }}>Nenhuma visita em {fmtDate(selectedDate)||selectedDate}.</p>
             </div>
           ) : (
             <>
@@ -249,15 +338,32 @@ export default function AdminView({ onLogout }) {
           {showAdd&&(
             <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
               <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Novo PDV</p>
-              <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:null}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+              <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:null,comprador:""}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
           <input type="text" placeholder="Buscar PDV…" value={searchPdv}
             onChange={e=>{setSearchPdv(e.target.value);setSelectedPdv(null);}}
             style={{...ipt,marginBottom:12,background:C.white,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}} />
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+            {[["todos","Todos"],["vende","Vende Dot"],["naovende","Não vende"],["consig","Com consig."]].map(([v,l])=>(
+              <button key={v} onClick={()=>setFilterPdv(v)} style={{
+                padding:"7px 12px",fontSize:11,cursor:"pointer",borderRadius:99,border:"none",fontFamily:"inherit",
+                fontWeight:filterPdv===v?600:400,
+                background:filterPdv===v?C.blue:"#f5f6fa",
+                color:filterPdv===v?"#fff":C.muted,
+              }}>{l}</button>
+            ))}
+          </div>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {stores
-              .filter(s=>!searchPdv||s.nome.toLowerCase().includes(searchPdv.toLowerCase())||(s.end||"").toLowerCase().includes(searchPdv.toLowerCase()))
+              .filter(s=>{
+                const q = searchPdv.toLowerCase();
+                const textMatch = !q || s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q);
+                if (filterPdv==="vende")    return textMatch && s.vendeu;
+                if (filterPdv==="naovende") return textMatch && !s.vendeu;
+                if (filterPdv==="consig")   return textMatch && s.consignado;
+                return textMatch;
+              })
               .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)])
               .map(s=>{
                 const hist=visitasPorPdv[s.id]||[], isSelected=selectedPdv===s.id;
@@ -267,7 +373,7 @@ export default function AdminView({ onLogout }) {
                   <div key={s.id} style={{ background:C.white, borderRadius:14, borderLeft:`4px solid ${color}`, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", overflow:"hidden" }}>
                     <div style={{ padding:"13px 14px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }} onClick={()=>setSelectedPdv(isSelected?null:s.id)}>
                       <div style={{ flex:1 }}>
-                        <p style={{ margin:"0 0 2px", fontSize:14, fontWeight:700, color:C.text }}>{s.nome}</p>
+                        <p style={{ margin:"0 0 2px", fontSize:14, fontWeight:700, color:C.text, textTransform:"capitalize" }}>{s.nome}</p>
                         <p style={{ margin:0, fontSize:11, color:C.muted }}>{TIPO_LABEL[s.tipo]} · {s.end}</p>
                       </div>
                       <div style={{ textAlign:"right", marginLeft:8 }}>
@@ -325,7 +431,10 @@ export default function AdminView({ onLogout }) {
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {rotas.length===0 ? (
-              <p style={{ textAlign:"center", color:C.muted, fontSize:14, padding:"3rem 0" }}>Nenhuma rota criada ainda.</p>
+              <div style={{ textAlign:"center", padding:"3rem 0" }}>
+                <i className="ti ti-clipboard" style={{fontSize:48,color:"#d1d5db"}}/>
+                <p style={{ color:C.muted, fontSize:14, marginTop:10 }}>Nenhuma rota criada ainda.</p>
+              </div>
             ) : rotas.map(r=>{
               const qtd=stores.filter(s=>s.rotaId===r.id).length, isActive=rotaAtiva===r.id;
               const isEditingR=editRota?.id===r.id, isDelR=confirmDelRota===r.id;
@@ -392,8 +501,8 @@ export default function AdminView({ onLogout }) {
               .sort((a,b)=>{ const da=a.visita?daysSince(a.visita):9999, db=b.visita?daysSince(b.visita):9999; return db-da; })
               .map(s=>{
                 const d=s.visita?daysSince(s.visita):null;
-                const color=!s.visita?C.muted:d>30?C.red:d>14?C.amber:C.green;
-                const bg=!s.visita?"#f3f4f6":d>30?C.redDim:d>14?C.amberDim:C.greenDim;
+                const color=!s.visita?C.muted:d>=15?C.red:d>=8?C.amber:C.green;
+                const bg=!s.visita?"#f3f4f6":d>=15?C.redDim:d>=8?C.amberDim:C.greenDim;
                 return (
                   <div key={s.id} style={{ background:C.white, borderRadius:12, padding:"12px 14px", boxShadow:"0 2px 6px rgba(0,0,0,0.05)", borderLeft:`4px solid ${color}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <div style={{ flex:1 }}>
@@ -418,7 +527,7 @@ export default function AdminView({ onLogout }) {
             const consignados = stores.filter(s=>s.consignado);
             return (
               <>
-                <div style={{ background:"linear-gradient(135deg,#7c3aed,#9f67fa)", borderRadius:20, padding:"18px 20px", marginBottom:16, color:"#fff" }}>
+                <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"18px 20px", marginBottom:16, color:"#fff" }}>
                   <p style={{ margin:"0 0 4px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>DISPLAYS CONSIGNADOS</p>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                     <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📦 Em campo</p>
@@ -428,8 +537,8 @@ export default function AdminView({ onLogout }) {
                 </div>
                 {consignados.length===0 ? (
                   <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
-                    <div style={{ fontSize:48, marginBottom:14 }}>📦</div>
-                    <p style={{ color:"#6b7280", fontSize:14 }}>Nenhum PDV com display consignado ainda.</p>
+                    <i className="ti ti-package" style={{fontSize:48,color:"#d1d5db"}}/>
+                    <p style={{ color:"#6b7280", fontSize:14, marginTop:14 }}>Nenhum PDV com display consignado ainda.</p>
                   </div>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -439,7 +548,7 @@ export default function AdminView({ onLogout }) {
                         const d=s.visita?daysSince(s.visita):null;
                         const color=!s.visita?"#9ca3af":d===0?"#16a34a":d<=14?"#d97706":"#dc2626";
                         return (
-                          <div key={s.id} style={{ background:"#ffffff", borderRadius:14, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,0.06)", borderLeft:"4px solid #7c3aed" }}>
+                          <div key={s.id} style={{ background:"#ffffff", borderRadius:14, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,0.06)", borderLeft:`4px solid ${C.blue}` }}>
                             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
                               <div style={{ flex:1 }}>
                                 <p style={{ margin:"0 0 2px", fontSize:14, fontWeight:700, color:"#111827" }}>{s.nome}</p>
@@ -454,6 +563,80 @@ export default function AdminView({ onLogout }) {
                           </div>
                         );
                       })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── ABA AGENDA ── */}
+      {aba==="agenda"&&(
+        <div style={{padding:"1rem"}}>
+          {/* Month nav */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <Btn variant="ghost" style={{padding:"8px 16px",fontSize:18}} onClick={()=>{
+              if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);
+              setDiaAberto(null);
+            }}>‹</Btn>
+            <span style={{fontSize:15,fontWeight:700,color:C.text}}>
+              {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][calMonth]} {calYear}
+            </span>
+            <Btn variant="ghost" style={{padding:"8px 16px",fontSize:18}} onClick={()=>{
+              if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);
+              setDiaAberto(null);
+            }}>›</Btn>
+          </div>
+          {/* Week header */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
+            {["S","T","Q","Q","S","S","D"].map((d,i)=>(
+              <div key={i} style={{textAlign:"center",fontSize:10,color:C.muted,fontWeight:600}}>{d}</div>
+            ))}
+          </div>
+          {/* Calendar grid */}
+          {(()=>{
+            const agendaMap = {};
+            agenda.forEach(a=>{agendaMap[a.data]=a.rota_id;});
+            const firstDow = new Date(calYear,calMonth,1).getDay();
+            const startOff = firstDow===0?6:firstDow-1;
+            const daysInM = new Date(calYear,calMonth+1,0).getDate();
+            return (
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+                  {Array(startOff).fill(null).map((_,i)=><div key={`e${i}`}/>)}
+                  {Array(daysInM).fill(null).map((_,i)=>{
+                    const day=i+1;
+                    const ds=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                    const rotaId=agendaMap[ds];
+                    const rota=rotaId?rotas.find(r=>r.id===rotaId):null;
+                    const isToday=ds===TODAY, isPast=ds<TODAY, isOpen=diaAberto===ds;
+                    return (
+                      <div key={day} onClick={()=>{setDiaAberto(isOpen?null:ds);setRotaParaDia(rotaId||"");}}
+                        style={{
+                          borderRadius:10,padding:"6px 4px",textAlign:"center",cursor:"pointer",
+                          background:rota?C.blue:isOpen?C.blueDim:C.white,
+                          border:isToday?`2px solid ${C.yellow}`:`1px solid ${C.border}`,
+                          opacity:isPast?0.5:1,minHeight:48,
+                        }}>
+                        <p style={{margin:"0 0 2px",fontSize:12,fontWeight:700,color:rota?"#fff":C.text}}>{day}</p>
+                        {rota&&<p style={{margin:0,fontSize:8,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"0 2px"}}>{rota.nome}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {diaAberto&&(
+                  <div style={{background:C.white,borderRadius:16,padding:16,marginTop:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
+                    <p style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:C.text}}>
+                      {new Date(diaAberto+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
+                    </p>
+                    <select value={rotaParaDia} onChange={e=>setRotaParaDia(e.target.value)} style={{...ipt,marginBottom:10}}>
+                      <option value="">— Sem rota —</option>
+                      {rotas.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
+                    </select>
+                    <Btn variant="blue" style={{width:"100%",padding:"11px 0"}} onClick={()=>salvarAgenda(diaAberto,rotaParaDia||null)}>
+                      {savingAgenda?"Salvando…":"Salvar"}
+                    </Btn>
                   </div>
                 )}
               </>

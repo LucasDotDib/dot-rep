@@ -37,6 +37,7 @@ export const fromDB = r => ({
   id:r.id, nome:r.nome, end:r.endereco||"", cep:r.cep||"", tipo:r.tipo||"facu",
   prio:r.prioridade||0, vendeu:r.vendeu_dot||false, visita:r.ultima_visita||null,
   obs:r.obs||"", rotaId:r.rota_id||null, consignado:r.Consignado||false,
+  comprador: r.comprador||"",
 });
 
 export const TIPO_LABEL = { facu:"Faculdade", corp:"Corporativo", armazem:"Armazém", bar:"Bar / Rest.", outro:"Outro" };
@@ -88,7 +89,7 @@ export function BottomNav({ aba, setAba, tabs }) {
       }}>
         {tabs.map(([v, icon, label]) => (
           <button key={v} onClick={()=>setAba(v)} title={label} style={{
-            flex:1, padding:"9px 0", cursor:"pointer",
+            flex:1, padding:"9px 14px", cursor:"pointer",
             borderRadius:99, border:"none", fontFamily:"inherit",
             background:aba===v?"#ffffff":"transparent",
             color:aba===v?C.nav:"#6b7280",
@@ -206,7 +207,7 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
           {isEdit ? (
             <div>
               <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Editar PDV</p>
-              <FormPDV initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId}}
+              <FormPDV initial={{nome:s.nome,end:s.end,cep:cepFmt||"",tipo:s.tipo,prio:s.prio,rotaId:s.rotaId,comprador:s.comprador||""}}
                 onSave={(form)=>editar(s.id,form)} onCancel={()=>setEditing(null)} saving={saving} rotas={rotas} />
             </div>
           ) : (
@@ -216,6 +217,17 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
                 <textarea rows={2} value={obsVal} placeholder="Anotação sobre o PDV…"
                   onChange={e=>setObs(p=>({...p,[s.id]:e.target.value}))} onBlur={()=>saveObs(s.id)}
                   style={{...ipt,resize:"none",fontSize:13}} />
+              </div>
+              <div>
+                <p style={{margin:"0 0 4px",fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                  <i className="ti ti-user" style={{marginRight:4}}/> Comprador
+                </p>
+                <input
+                  placeholder="Nome do comprador…"
+                  defaultValue={s.comprador||""}
+                  onBlur={e=>{ if(e.target.value!==s.comprador) atualizar(s.id,{comprador:e.target.value}); }}
+                  style={{...ipt,fontSize:13}}
+                />
               </div>
               {hist.length>0&&(
                 <div>
@@ -264,6 +276,7 @@ export function FormPDV({ initial, onSave, onCancel, saving, rotas }) {
         {errors.end&&<p style={{fontSize:11,color:C.red,margin:"3px 0 0"}}>Endereço obrigatório</p>}
       </div>
       <input placeholder="CEP (ex: 01310-100)" value={form.cep} onChange={e=>set("cep",fmtCep(e.target.value))} style={ipt} inputMode="numeric" />
+      <input placeholder="Nome do comprador (opcional)" value={form.comprador||""} onChange={e=>set("comprador",e.target.value)} style={ipt} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
         <select value={form.tipo} onChange={e=>set("tipo",e.target.value)} style={{...ipt,padding:"11px 10px"}}>
           {TIPOS.map(t=><option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
