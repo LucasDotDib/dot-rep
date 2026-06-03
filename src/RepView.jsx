@@ -1,674 +1,304 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
-import { C, ipt, Btn, FormPDV, TODAY, daysSince, fmtDate, fmtCep, fromDB, TIPO_LABEL, getUrgencia, URGENCIA } from "./ui";
-
-const FONT = "'Plus Jakarta Sans', sans-serif";
-const URG_ORDER = { critica:0, media:1, ok:2 };
-const cepCmp = (a,b) => (a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""));
-
-const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
-const padZ = n => String(n).padStart(2, "0");
-const toDateStr = (y, m, d) => `${y}-${padZ(m)}-${padZ(d)}`;
-const WEEKDAY = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-
-function Tag({ children, bg="#f5f6fa", color="#6b7280" }) {
-  return <span style={{ fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:99, background:bg, color, whiteSpace:"nowrap" }}>{children}</span>;
-}
-
-function SectionHead({ icon, label, count, color, bg, collapsible, collapsed, onToggle }) {
-  return (
-    <div
-      onClick={collapsible ? onToggle : undefined}
-      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:bg, borderRadius:10, marginBottom:8, cursor:collapsible?"pointer":undefined }}
-    >
-      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-        <i className={`ti ${icon}`} style={{ fontSize:14, color }} />
-        <span style={{ fontSize:12, fontWeight:700, color, letterSpacing:"0.04em" }}>{label} ({count})</span>
-      </div>
-      {collapsible && <i className={`ti ${collapsed?"ti-chevron-right":"ti-chevron-down"}`} style={{ fontSize:14, color }} />}
-    </div>
-  );
-}
-
-function PdvCard({ s, rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel, setObs, marcar, atualizar, editar, remover, saveObs, saving, marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
-  const urg = getUrgencia(s.visita), cfg = URGENCIA[urg];
-  const [compradorEdit, setCompradorEdit] = useState(s.comprador||"");
-  const isVisitedToday = daysSince(s.visita) === 0;
-  const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id, isDel=confirmDel===s.id;
-  const isMarcando = marcandoId===s.id;
-  const obsVal = obs[s.id]!==undefined ? obs[s.id] : (s.obs||"");
-  const cepFmt = s.cep ? s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):"") : null;
-  const rota = rotas.find(r=>r.id===s.rotaId);
-  const hist = historico[s.id]||[];
-
-  return (
-    <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cfg.barColor}`, overflow:"hidden", boxShadow:"0 2px 14px rgba(15,23,41,.06)" }}>
-      <div style={{ padding:"14px 14px 0" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</div>
-            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{s.end}{cepFmt ? ` · ${cepFmt}` : ""}</div>
-          </div>
-          <span style={{ fontSize:10, fontWeight:800, padding:"4px 10px", borderRadius:99, flexShrink:0, background:cfg.badgeBg, color:cfg.badgeText, letterSpacing:"0.06em" }}>{cfg.label}</span>
-        </div>
-        <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9, marginBottom:2 }}>
-          <Tag>{TIPO_LABEL[s.tipo]}</Tag>
-          {rota      && <Tag bg="#eff6ff" color={C.blue}>📍 {rota.nome}</Tag>}
-          {s.vendeu  && <Tag bg={C.greenDim} color={C.green}>Vende Dot</Tag>}
-          {s.comprador && <Tag bg="#f5f0ff" color="#7c3aed">👤 {s.comprador}</Tag>}
-        </div>
-      </div>
-
-      {isMarcando&&!isVisitedToday&&(
-        <div style={{ padding:"8px 14px 0" }}>
-          <input
-            placeholder="Observação da visita (opcional)…"
-            value={marcObs}
-            onChange={e=>setMarcObs(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&marcar(s.id, marcObs)}
-            style={{...ipt, fontSize:13}}
-            autoFocus
-          />
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:7, padding:"10px 14px" }}>
-        {isMarcando&&!isVisitedToday ? (
-          <>
-            <Btn variant="blue" style={{flex:1,padding:"11px 0",borderRadius:10,fontSize:13}} onClick={()=>marcar(s.id, marcObs)}>
-              ✓ Confirmar visita
-            </Btn>
-            <Btn variant="ghost" style={{padding:"11px 12px",fontSize:13}} onClick={()=>{setMarcandoId(null);setMarcObs("");}}>
-              Cancelar
-            </Btn>
-          </>
-        ) : (
-          <>
-            <Btn
-              variant={isFlash||isVisitedToday ? "green" : "yellow"}
-              style={{flex:1, padding:"11px 0", borderRadius:11, fontWeight:700, cursor:isVisitedToday?"default":"pointer", opacity:isVisitedToday?0.7:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6}}
-              onClick={()=>!isVisitedToday&&setMarcandoId(s.id)}
-            >
-              <i className={`ti ${isFlash||isVisitedToday?"ti-check":"ti-map-pin"}`} style={{ fontSize:14 }} />
-              {isFlash ? "Registrado!" : isVisitedToday ? "Visitado hoje" : "Marcar visita"}
-            </Btn>
-            <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12,display:"flex",alignItems:"center",gap:4}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
-              <i className={`ti ${s.vendeu?"ti-check":"ti-bolt"}`} style={{ fontSize:13 }} />
-              {s.vendeu?"Dot":"+ Dot"}
-            </Btn>
-            <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 12px"}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
-              <i className={`ti ${isExp?"ti-chevron-up":"ti-chevron-down"}`} style={{ fontSize:16, color:C.gray }} />
-            </Btn>
-          </>
-        )}
-      </div>
-
-      {isExp&&(
-        <div style={{ padding:"12px 14px 14px", borderTop:`1px solid ${C.border}` }}>
-          {isEdit ? (
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em" }}>COMPRADOR / RESPONSÁVEL</div>
-              <input
-                value={compradorEdit}
-                onChange={e=>setCompradorEdit(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&editar(s.id, compradorEdit)}
-                placeholder="Nome do comprador…"
-                style={{...ipt, fontSize:13}}
-                autoFocus
-              />
-              <div style={{ display:"flex", gap:8 }}>
-                <Btn variant="yellow" style={{flex:1,padding:"11px 0",fontSize:13}} onClick={()=>editar(s.id, compradorEdit)} disabled={saving}>
-                  {saving?"Salvando…":"Salvar"}
-                </Btn>
-                <Btn variant="ghost" style={{padding:"11px 14px",fontSize:13}} onClick={()=>setEditing(null)}>Cancelar</Btn>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <div>
-                <div style={{ fontSize:10, color:C.gray, fontWeight:600, letterSpacing:"0.07em", marginBottom:6 }}>OBSERVAÇÕES DO PDV</div>
-                <textarea
-                  rows={2} value={obsVal}
-                  placeholder="Anotação sobre o PDV…"
-                  onChange={e=>setObs(p=>({...p,[s.id]:e.target.value}))}
-                  onBlur={()=>saveObs(s.id)}
-                  style={{...ipt, resize:"none", fontSize:13}}
-                />
-              </div>
-              {hist.length>0&&(
-                <div>
-                  <div style={{ fontSize:10, color:C.gray, fontWeight:600, letterSpacing:"0.07em", marginBottom:7 }}>HISTÓRICO DE VISITAS</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                    {hist.map(v=>(
-                      <div key={v.id} style={{ fontSize:12, padding:"8px 11px", background:C.grayDim, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
-                        <span style={{ color:C.blue, fontWeight:600, fontFamily:"monospace", flexShrink:0 }}>{fmtDate(v.data)}</span>
-                        {v.obs ? <span style={{ color:C.muted, lineHeight:1.4 }}>{v.obs}</span> : <span style={{ color:C.gray, fontStyle:"italic" }}>sem obs.</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <Btn variant="default" style={{width:"100%",padding:"9px 0",fontSize:12}} onClick={()=>{ setCompradorEdit(s.comprador||""); setEditing(s.id); }}>
-                ✏️ Editar comprador
-              </Btn>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { C, ipt, Btn, FormPDV, PdvCardLight, BottomNav, TODAY, daysSince, visitStatus, fromDB, ORDER } from "./ui";
 
 export default function RepView({ onLogout }) {
-  const [stores,     setStores]     = useState(null);
-  const [rotas,      setRotas]      = useState([]);
-  const [agendaHoje, setAgendaHoje] = useState([]);
-  const [historico,  setHistorico]  = useState({});
-  const [erro,       setErro]       = useState(null);
-  const [aba,        setAba]        = useState("hoje");
-  const [search,     setSearch]     = useState("");
-  const [filter,     setFilter]     = useState("todos");
-  const [sort,       setSort]       = useState("smart");
-  const [expanded,   setExpanded]   = useState(null);
-  const [editing,    setEditing]    = useState(null);
-  const [flash,      setFlash]      = useState(null);
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [saving,     setSaving]     = useState(false);
+  const [stores, setStores]       = useState(null);
+  const [rotas, setRotas]         = useState([]);
+  const [rotaAtiva, setRotaAtiva] = useState(null);
+  const [historico, setHistorico] = useState({});
+  const [erro, setErro]           = useState(null);
+  const [aba, setAba]             = useState("hoje");
+  const [search, setSearch]       = useState("");
+  const [filter, setFilter]       = useState("todos");
+  const [sort, setSort]           = useState("smart");
+  const [expanded, setExpanded]   = useState(null);
+  const [editing, setEditing]     = useState(null);
+  const [flash, setFlash]         = useState(null);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
-  const [obs,        setObs]        = useState({});
+  const [obs, setObs]             = useState({});
   const [marcandoId, setMarcandoId] = useState(null);
-  const [marcObs,    setMarcObs]    = useState("");
-  const [okCollapsed,   setOkCollapsed]   = useState({});
-  const [selectedRota,  setSelectedRota]  = useState(null);
-
-  const now = new Date();
-  const [agendaYear,  setAgendaYear]  = useState(now.getFullYear());
-  const [agendaMonth, setAgendaMonth] = useState(now.getMonth() + 1);
-  const [agendaMes,   setAgendaMes]   = useState([]);
-  const agendaViewRef = useRef({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  const [marcObs, setMarcObs]     = useState("");
 
   const carregar = useCallback(async () => {
-    try {
-      const [pdvs, rts, agenda, vis] = await Promise.all([
-        supabase.from("pdvs").select("*").order("criado_em", { ascending:true }),
-        supabase.from("rotas").select("*").order("nome", { ascending:true }),
-        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true }),
-        supabase.from("visitas").select("*").order("criado_em", { ascending:false }),
-      ]);
-      const err = pdvs.error || rts.error || vis.error;
-      if (err) { setErro(err.message); return; }
-      setStores((pdvs.data||[]).map(fromDB));
-      setRotas(rts.data||[]);
-      setAgendaHoje(agenda.data||[]);
-      const hist = {};
-      for (const v of (vis.data||[])) {
-        if (!hist[v.pdv_id]) hist[v.pdv_id] = [];
-        hist[v.pdv_id].push({ id:v.id, data:(v.data||"").slice(0,10), obs:v.obs||"" });
-      }
-      setHistorico(hist);
-    } catch(e) {
-      setErro(e.message||"Erro ao carregar dados.");
-    }
-  }, []);
-
-  const carregarAgenda = useCallback(async (year, month) => {
-    const first = toDateStr(year, month, 1);
-    const last  = toDateStr(year, month, daysInMonth(year, month));
-    const { data } = await supabase.from("agenda").select("*")
-      .gte("data", first).lte("data", last)
-      .order("data", { ascending:true }).order("ordem", { ascending:true });
-    setAgendaMes(data||[]);
+    const [pdvs, rts, ativa, vis] = await Promise.all([
+      supabase.from("pdvs").select("*").order("criado_em",{ascending:true}),
+      supabase.from("rotas").select("*").order("nome",{ascending:true}),
+      supabase.from("rota_ativa").select("*").eq("id",1).single(),
+      supabase.from("visitas").select("*").order("criado_em",{ascending:false}),
+    ]);
+    if (pdvs.error) { setErro(pdvs.error.message); return; }
+    setStores((pdvs.data||[]).map(fromDB));
+    setRotas(rts.data||[]);
+    setRotaAtiva(ativa.data?.rota_id||null);
+    const hist={};
+    for (const v of (vis.data||[])) { if(!hist[v.pdv_id])hist[v.pdv_id]=[]; hist[v.pdv_id].push({id:v.id,data:v.data,obs:v.obs||""}); }
+    setHistorico(hist);
   }, []);
 
   useEffect(() => {
     carregar();
     const ch = supabase.channel("rep-changes")
-      .on("postgres_changes", { event:"*", schema:"public", table:"pdvs" }, ({ eventType, new:n, old:o }) => {
-        if (eventType==="INSERT")      setStores(prev => [...prev, fromDB(n)]);
-        else if (eventType==="UPDATE") setStores(prev => prev.map(s => s.id===n.id ? fromDB(n) : s));
-        else if (eventType==="DELETE") setStores(prev => prev.filter(s => s.id!==o.id));
-      })
-      .on("postgres_changes", { event:"*", schema:"public", table:"rotas" }, ({ eventType, new:n, old:o }) => {
-        if (eventType==="INSERT")      setRotas(prev => [...prev, n].sort((a,b)=>a.nome.localeCompare(b.nome)));
-        else if (eventType==="UPDATE") setRotas(prev => prev.map(r => r.id===n.id ? n : r));
-        else if (eventType==="DELETE") setRotas(prev => prev.filter(r => r.id!==o.id));
-      })
-      .on("postgres_changes", { event:"*", schema:"public", table:"agenda" }, () => {
-        supabase.from("agenda").select("*").eq("data", TODAY).order("ordem", { ascending:true })
-          .then(({ data }) => setAgendaHoje(data||[]));
-        const { year, month } = agendaViewRef.current;
-        const first = toDateStr(year, month, 1);
-        const last  = toDateStr(year, month, daysInMonth(year, month));
-        supabase.from("agenda").select("*").gte("data", first).lte("data", last)
-          .order("data", { ascending:true }).order("ordem", { ascending:true })
-          .then(({ data }) => setAgendaMes(data||[]));
-      })
-      .on("postgres_changes", { event:"*", schema:"public", table:"visitas" }, ({ eventType, new:n }) => {
-        if (eventType==="INSERT" && n)
-          setHistorico(prev => ({
-            ...prev,
-            [n.pdv_id]: [{ id:n.id, data:(n.data||"").slice(0,10), obs:n.obs||"" }, ...(prev[n.pdv_id]||[])],
-          }));
-      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"pdvs"},()=>carregar())
+      .on("postgres_changes",{event:"*",schema:"public",table:"rotas"},()=>carregar())
+      .on("postgres_changes",{event:"*",schema:"public",table:"rota_ativa"},()=>carregar())
+      .on("postgres_changes",{event:"*",schema:"public",table:"visitas"},()=>carregar())
       .subscribe();
-    return () => supabase.removeChannel(ch);
+    return ()=>supabase.removeChannel(ch);
   }, [carregar]);
-
-  useEffect(() => {
-    agendaViewRef.current = { year: agendaYear, month: agendaMonth };
-    if (aba === "agenda") carregarAgenda(agendaYear, agendaMonth);
-  }, [aba, agendaYear, agendaMonth, carregarAgenda]);
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
-    const rotaFinal = form.rotaId || (aba==="hoje" && agendaHoje.length>0 ? agendaHoje[0].rota_id : null);
-    const newId = Date.now().toString();
+    const rotaFinal = form.rotaId||(aba==="hoje"&&rotaAtiva?rotaAtiva:null);
     const { error } = await supabase.from("pdvs").insert([{
-      id:newId, nome:form.nome.trim(), endereco:form.end.trim(),
-      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:0,
+      id:Date.now().toString(), nome:form.nome.trim(), endereco:form.end.trim(),
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio,
       vendeu_dot:false, ultima_visita:null, obs:"", rota_id:rotaFinal,
-      comprador:form.comprador?.trim()||"",
     }]);
-    if (error) { setErro(error.message); }
-    else {
-      setShowAdd(false);
-      setStores(prev => [...prev, {
-        id:newId, nome:form.nome.trim(), end:form.end.trim(),
-        cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prio:0,
-        vendeu:false, visita:null, obs:"", rotaId:rotaFinal,
-        comprador:form.comprador?.trim()||"",
-      }]);
-    }
+    if(error) setErro(error.message); else setShowAdd(false);
     setSaving(false);
-  }, [aba, agendaHoje]);
+  }, [aba, rotaAtiva]);
 
-  const editar = useCallback(async (id, comprador) => {
+  const editar = useCallback(async (id, form) => {
     setSaving(true);
     const { error } = await supabase.from("pdvs").update({
-      comprador: comprador?.trim()||"",
-    }).eq("id", id);
-    if (error) { setErro(error.message); }
-    else {
-      setEditing(null);
-      setStores(prev => prev.map(s => s.id===id ? { ...s, comprador: comprador?.trim()||"" } : s));
-    }
+      nome:form.nome.trim(), endereco:form.end.trim(),
+      cep:form.cep.replace(/\D/g,""), tipo:form.tipo, prioridade:form.prio, rota_id:form.rotaId,
+    }).eq("id",id);
+    if(error) setErro(error.message); else setEditing(null);
     setSaving(false);
   }, []);
 
   const atualizar = useCallback(async (id, campos) => {
-    const DB_CLIENT = { ultima_visita:"visita", vendeu_dot:"vendeu", endereco:"end", rota_id:"rotaId", prioridade:"prio" };
-    const local = Object.fromEntries(Object.entries(campos).map(([k,v]) => [DB_CLIENT[k]||k, v]));
-    setStores(prev => prev.map(s => s.id===id ? {...s, ...local} : s));
-    const { error } = await supabase.from("pdvs").update(campos).eq("id", id);
-    if (error) setErro(error.message);
+    const { error } = await supabase.from("pdvs").update(campos).eq("id",id);
+    if(error) setErro(error.message);
   }, []);
 
   const marcar = useCallback(async (id, obsText) => {
     setMarcandoId(null); setMarcObs("");
-    const visitaId = Date.now().toString();
-    setHistorico(prev => ({
-      ...prev,
-      [id]: [{ id:visitaId, data:TODAY, obs:obsText||"" }, ...(prev[id]||[])],
-    }));
     await Promise.all([
-      atualizar(id, { ultima_visita:TODAY }),
-      supabase.from("visitas").insert([{ id:visitaId, pdv_id:id, data:TODAY, obs:obsText||"" }]),
+      atualizar(id,{ultima_visita:TODAY}),
+      supabase.from("visitas").insert([{id:Date.now().toString(),pdv_id:id,data:TODAY,obs:obsText||""}]),
     ]);
-    setFlash(id); setTimeout(()=>setFlash(null), 2000);
+    setFlash(id); setTimeout(()=>setFlash(null),2000);
   }, [atualizar]);
 
   const saveObs = useCallback(async (id) => {
-    if (obs[id]!==undefined) {
-      await atualizar(id, { obs:obs[id] });
-      setObs(p=>{ const n={...p}; delete n[id]; return n; });
-    }
+    if(obs[id]!==undefined){ await atualizar(id,{obs:obs[id]}); setObs(p=>{const n={...p};delete n[id];return n;}); }
   }, [obs, atualizar]);
 
   const remover = useCallback(async (id) => {
-    const { error } = await supabase.from("pdvs").delete().eq("id", id);
-    if (error) { setErro(error.message); }
-    else {
-      setExpanded(null); setConfirmDel(null);
-      setStores(prev => prev.filter(s => s.id!==id));
-    }
+    const { error } = await supabase.from("pdvs").delete().eq("id",id);
+    if(error) setErro(error.message); else { setExpanded(null); setConfirmDel(null); }
   }, []);
 
   if (!stores) return (
-    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, fontFamily:FONT }}>
-      <div style={{ width:34, height:34, border:`3px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }}>
+      <div style={{ width:28, height:28, border:"3px solid #eaecf0", borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if (erro) return (
-    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center", fontFamily:FONT }}>
+    <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12, padding:"2rem", textAlign:"center" }}>
       <div style={{ fontSize:32 }}>⚠️</div>
-      <div style={{ fontSize:14, lineHeight:1.6, color:C.red }}>{erro}</div>
-      <Btn variant="default" style={{ padding:"10px 20px" }} onClick={()=>{ setErro(null); carregar(); }}>Tentar novamente</Btn>
+      <div style={{ fontSize:14, color:C.red, lineHeight:1.6 }}>{erro}</div>
+      <Btn variant="ghost" style={{padding:"10px 20px"}} onClick={()=>{setErro(null);carregar();}}>Tentar novamente</Btn>
     </div>
   );
 
+  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
+  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
+  const totalRota     = pdvsRotaAtiva.length;
+  const visitadosRota = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+
   const listaTodos = stores
-    .filter(s => {
+    .filter(s=>{
       const q=search.toLowerCase(), m=!q||s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q)||(s.cep||"").includes(q);
+      if(filter==="prio")      return m&&s.prio===1;
       if(filter==="pendentes") return m&&daysSince(s.visita)!==0;
       if(filter==="hoje")      return m&&daysSince(s.visita)===0;
       return m;
     })
-    .sort((a,b) => sort==="cep"
-      ? cepCmp(a,b)
-      : URG_ORDER[getUrgencia(a.visita)]-URG_ORDER[getUrgencia(b.visita)] || cepCmp(a,b));
+    .sort((a,b)=>sort==="cep"
+      ?(a.cep||"").replace(/\D/g,"").localeCompare((b.cep||"").replace(/\D/g,""))
+      :b.prio-a.prio||ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
+
+  const listaHoje = pdvsRotaAtiva.slice()
+    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]||(a.cep||"").localeCompare(b.cep||""));
 
   const cardProps = {
-    rotas, expanded, editing, flash, confirmDel, obs, setExpanded, setEditing, setConfirmDel,
-    setObs, marcar, atualizar, editar, remover, saveObs, saving,
+    rotas, expanded, editing, flash, confirmDel, obs,
+    setExpanded, setEditing, setConfirmDel, setObs,
+    marcar, atualizar, editar, remover, saveObs, saving,
     marcandoId, setMarcandoId, marcObs, setMarcObs, historico,
   };
 
-  const prevMonth = () => {
-    if (agendaMonth === 1) { setAgendaYear(y=>y-1); setAgendaMonth(12); }
-    else setAgendaMonth(m=>m-1);
-  };
-  const nextMonth = () => {
-    if (agendaMonth === 12) { setAgendaYear(y=>y+1); setAgendaMonth(1); }
-    else setAgendaMonth(m=>m+1);
-  };
-
-  const NAV_TABS = [
-    ["hoje",   "ti-target",         "Hoje"  ],
-    ["todos",  "ti-layout-list",    "Todos" ],
-    ["rotas",  "ti-map-pin",        "Rotas" ],
-    ["agenda", "ti-calendar-month", "Agenda"],
-  ];
+  const pendRota = totalRota - visitadosRota;
+  const TABS = [["hoje","🎯","Hoje"],["todos","⊞","Todos"],["rotas","◎","Rotas"],["consig","📦","Consig."]];
 
   return (
-    <div style={{ fontFamily:FONT, background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:90 }}>
+    <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
 
       {/* HEADER */}
-      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`, padding:"14px 20px", position:"sticky", top:0, zIndex:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:11 }}>
-            <div style={{ width:38, height:38, borderRadius:12, background:`linear-gradient(135deg,${C.blue},${C.blue2})`, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(27,58,140,.28)", flexShrink:0 }}>
-              <i className="ti ti-bolt" style={{ fontSize:20, color:C.yellow }} />
-            </div>
+      <div style={{ background:C.white, padding:"1rem 1rem 0", boxShadow:"0 1px 0 #eaecf0" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4, paddingBottom:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>⚡</div>
             <div>
-              <div style={{ fontSize:10, color:C.muted, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", lineHeight:1 }}>Dot Energy</div>
-              <div style={{ fontSize:17, fontWeight:800, color:C.text, lineHeight:1.2, letterSpacing:"-.02em" }}>Rota PDV</div>
+              <p style={{ margin:0, fontSize:11, color:C.muted, letterSpacing:"0.06em" }}>DOT ENERGY</p>
+              <h1 style={{ margin:0, fontSize:18, fontWeight:700, color:C.text, letterSpacing:"-0.01em" }}>Rota PDV</h1>
             </div>
           </div>
-          <div style={{ display:"flex", gap:7, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:6 }}>
             {aba!=="rotas"&&(
-              <Btn variant={showAdd?"danger":"blue"} style={{padding:"8px 14px",fontSize:12,display:"flex",alignItems:"center",gap:5}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
-                {showAdd ? <><i className="ti ti-x" style={{fontSize:13}}/> Fechar</> : <><i className="ti ti-plus" style={{fontSize:13}}/> PDV</>}
+              <Btn variant={showAdd?"danger":"blue"} style={{padding:"8px 14px",fontSize:12}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
+                {showAdd?"✕":"+ PDV"}
               </Btn>
             )}
-            <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", padding:6 }}>
-              <i className="ti ti-logout" style={{ fontSize:20, color:C.muted }} />
-            </button>
+            <Btn variant="ghost" style={{padding:"8px 12px",fontSize:12}} onClick={onLogout}>Sair</Btn>
           </div>
         </div>
       </div>
 
-      {/* ── ABA HOJE ── */}
+      {/* ABA HOJE */}
       {aba==="hoje"&&(
-        <div style={{ padding:"16px 16px 0" }}>
-          {agendaHoje.length === 0 ? (
+        <div style={{ padding:"1rem" }}>
+          {!rotaAtiva ? (
             <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
-              <div style={{ width:64, height:64, borderRadius:20, background:C.blueDim, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
-                <i className="ti ti-calendar-off" style={{ fontSize:30, color:C.blue }} />
-              </div>
-              <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Sem rota para hoje</div>
-              <div style={{ fontSize:13, color:C.gray, lineHeight:1.6 }}>O admin ainda não definiu a agenda de hoje.</div>
+              <div style={{ fontSize:48, marginBottom:16 }}>🎯</div>
+              <h2 style={{ margin:"0 0 8px", fontSize:20, fontWeight:700, color:C.text }}>Nenhuma rota ativa</h2>
+              <p style={{ margin:"0 0 24px", fontSize:14, color:C.muted, lineHeight:1.6 }}>Aguarde o administrador ativar a rota do dia.</p>
+              <Btn variant="ghost" style={{padding:"10px 24px"}} onClick={()=>setAba("rotas")}>Ver rotas</Btn>
             </div>
           ) : (
             <>
-              {/* Banners de progresso — um por rota */}
-              {agendaHoje.map(item => {
-                const rota = rotas.find(r => r.id === item.rota_id);
-                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
-                const visitados = pdvsRota.filter(s => daysSince(s.visita) === 0).length;
-                const total = pdvsRota.length;
-                const criticos = pdvsRota.filter(s => getUrgencia(s.visita)==="critica").length;
-                const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media").length;
-                const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok").length;
-                return (
-                  <div key={item.id} style={{ background:`linear-gradient(135deg,${C.blue} 0%,${C.blue2} 100%)`, borderRadius:20, padding:"20px", marginBottom:10, boxShadow:"0 6px 28px rgba(27,58,140,.28)" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-                      <div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", marginBottom:4 }}>
-                          {agendaHoje.length > 1 ? `ROTA ${item.ordem}` : "ROTA ATIVA"}
-                        </div>
-                        <div style={{ fontSize:18, fontWeight:800, color:"#fff", letterSpacing:"-.02em", display:"flex", alignItems:"center", gap:7 }}>
-                          <i className="ti ti-map-pin" style={{ fontSize:16, color:C.yellow, flexShrink:0 }} />
-                          {rota?.nome||"—"}
-                        </div>
-                      </div>
-                      <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontSize:"2rem", fontWeight:800, color:C.yellow, lineHeight:1, letterSpacing:"-.04em", fontVariantNumeric:"tabular-nums" }}>
-                          {visitados}<span style={{ fontSize:"1rem", opacity:.5, fontWeight:600 }}>/{total}</span>
-                        </div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,.35)", letterSpacing:".1em", textTransform:"uppercase", marginTop:2 }}>Visitados</div>
-                      </div>
-                    </div>
-                    {total>0&&(
-                      <div style={{ height:6, background:"rgba(255,255,255,.15)", borderRadius:99, overflow:"hidden", marginBottom:8 }}>
-                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.5s cubic-bezier(.4,0,.2,1)" }} />
-                      </div>
-                    )}
-                    {total>0&&(
-                      <div style={{ display:"flex", gap:14, fontSize:11, fontWeight:600 }}>
-                        {criticos>0 && <span style={{ color:"#fca5a5" }}>{criticos} urgentes</span>}
-                        {medios>0   && <span style={{ color:"#fde68a" }}>{medios} pendentes</span>}
-                        {oks>0      && <span style={{ color:"#86efac" }}>{oks} em dia</span>}
-                      </div>
-                    )}
+              {/* Banner de progresso */}
+              <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"18px 20px", marginBottom:14, color:"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                  <div>
+                    <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>ROTA ATIVA</p>
+                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📍 {rotaAtivaObj?.nome||"—"}</p>
                   </div>
-                );
-              })}
+                  <div style={{ textAlign:"right" }}>
+                    <p style={{ margin:0, fontSize:32, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?"#a7f3d0":"#f5c800" }}>
+                      {visitadosRota}<span style={{fontSize:18,opacity:0.6}}>/{totalRota}</span>
+                    </p>
+                    <p style={{ margin:0, fontSize:10, opacity:0.6, letterSpacing:"0.06em" }}>VISITADOS</p>
+                  </div>
+                </div>
+                {totalRota>0&&(
+                  <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
+                    <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:"#f5c800", borderRadius:99, transition:"width 0.4s" }} />
+                  </div>
+                )}
+                {totalRota>0&&<p style={{ margin:"8px 0 0", fontSize:11, opacity:0.6 }}>{pendRota} pendente{pendRota!==1?"s":""}</p>}
+              </div>
 
               {showAdd&&(
-                <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, padding:"18px", marginBottom:16 }}>
-                  <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:14 }}>
-                    NOVO PDV{agendaHoje[0]&&rotas.find(r=>r.id===agendaHoje[0].rota_id)?` · ${rotas.find(r=>r.id===agendaHoje[0].rota_id).nome.toUpperCase()}`:""}
-                  </div>
-                  <FormPDV
-                    initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:agendaHoje[0]?.rota_id||null }}
-                    onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas}
-                  />
+                <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+                  <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                    Novo PDV {rotaAtivaObj?`· ${rotaAtivaObj.nome}`:""}
+                  </p>
+                  <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:rotaAtiva}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
                 </div>
               )}
 
-              {/* PDVs separados por rota */}
-              {agendaHoje.map(item => {
-                const rota = rotas.find(r => r.id === item.rota_id);
-                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id).sort(cepCmp);
-                const criticos = pdvsRota.filter(s => getUrgencia(s.visita)==="critica");
-                const medios   = pdvsRota.filter(s => getUrgencia(s.visita)==="media");
-                const oks      = pdvsRota.filter(s => getUrgencia(s.visita)==="ok");
-                const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
-                const isOkColl  = okCollapsed[item.rota_id] !== false;
-
-                if (pdvsRota.length === 0) return (
-                  <div key={item.id} style={{ textAlign:"center", padding:"1.5rem 0", color:C.gray, fontSize:13, marginBottom:8 }}>
-                    Nenhum PDV na rota <strong>{rota?.nome}</strong>.
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {listaHoje.length===0 ? (
+                  <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
+                    <div style={{ fontSize:36, marginBottom:10 }}>📍</div>
+                    <p style={{ color:C.muted, fontSize:14 }}>Nenhum PDV nesta rota ainda.</p>
                   </div>
-                );
+                ) : listaHoje.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
+              </div>
 
-                return (
-                  <div key={item.id} style={{ marginBottom:24 }}>
-                    {agendaHoje.length > 1 && (
-                      <div style={{ fontSize:11, fontWeight:700, color:C.blue, letterSpacing:"0.1em", marginBottom:10, paddingLeft:2 }}>
-                        📍 {rota?.nome?.toUpperCase()||"—"}
-                      </div>
-                    )}
-
-                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                      {criticos.length>0&&(
-                        <div>
-                          <SectionHead icon="ti-alert-circle" label="Urgente" count={criticos.length} color="#991b1b" bg="#fef2f2" />
-                          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                            {criticos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-                          </div>
-                        </div>
-                      )}
-                      {medios.length>0&&(
-                        <div>
-                          <SectionHead icon="ti-clock" label="Pendentes" count={medios.length} color="#92400e" bg="#fffbeb" />
-                          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                            {medios.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-                          </div>
-                        </div>
-                      )}
-                      {oks.length>0&&(
-                        <div>
-                          <SectionHead
-                            icon="ti-circle-check" label="Em dia" count={oks.length}
-                            color="#166534" bg="#f0fdf4"
-                            collapsible collapsed={isOkColl}
-                            onToggle={()=>setOkCollapsed(prev=>({...prev,[item.rota_id]:!isOkColl}))}
-                          />
-                          {!isOkColl&&(
-                            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                              {oks.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {pdvsRota.length>0&&visitados===pdvsRota.length&&(
-                      <div style={{ marginTop:14, padding:"14px", background:C.greenDim, border:`1px solid #bbf7d0`, borderRadius:12, textAlign:"center" }}>
-                        <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>🎉 {rota?.nome} — todos visitados!</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {totalRota>0&&visitadosRota===totalRota&&(
+                <div style={{ marginTop:12, padding:"14px", background:C.greenDim, border:"1px solid #bbf7d0", borderRadius:14, textAlign:"center" }}>
+                  <p style={{ margin:0, fontSize:14, color:C.green, fontWeight:700 }}>🎉 Rota completa — todos visitados!</p>
+                </div>
+              )}
             </>
           )}
         </div>
       )}
 
-      {/* ── ABA TODOS ── */}
+      {/* ABA TODOS */}
       {aba==="todos"&&(
-        <div style={{ padding:"16px 16px 0" }}>
+        <div style={{ padding:"1rem" }}>
           {showAdd&&(
-            <div style={{ background:C.white, borderRadius:16, border:`1px solid ${C.border}`, padding:"18px", marginBottom:16 }}>
-              <div style={{ fontSize:11, color:C.blue, fontWeight:700, letterSpacing:"0.08em", marginBottom:14 }}>NOVO PONTO DE VENDA</div>
-              <FormPDV initial={{ nome:"", end:"", cep:"", tipo:"facu", prio:0, rotaId:null }} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
+            <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Novo PDV</p>
+              <FormPDV initial={{nome:"",end:"",cep:"",tipo:"facu",prio:0,rotaId:null}} onSave={adicionar} onCancel={()=>setShowAdd(false)} saving={saving} rotas={rotas} />
             </div>
           )}
-          <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)} style={{...ipt, marginBottom:10}} />
+          <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)}
+            style={{...ipt, marginBottom:10, background:C.white, boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}} />
           <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-            {[["todos","Todos"],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
-              <Btn key={v} variant={filter===v?"yellow":"ghost"} style={{flex:1,padding:"7px 0",fontSize:11}} onClick={()=>setFilter(v)}>{l}</Btn>
+            {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setFilter(v)} style={{
+                flex:1, padding:"8px 0", fontSize:12, cursor:"pointer", borderRadius:10, border:"none", fontFamily:"inherit",
+                fontWeight:filter===v?700:400,
+                background:filter===v?C.blue:"#ffffff",
+                color:filter===v?"#fff":C.muted,
+                boxShadow:filter===v?"0 2px 8px rgba(27,58,140,0.2)":"none",
+              }}>{l}</button>
             ))}
           </div>
           <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            <Btn variant={sort==="smart"?"blue":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("smart")}>↕ Urgência</Btn>
-            <Btn variant={sort==="cep"?"yellow":"ghost"} style={{flex:1,padding:"6px 0",fontSize:11}} onClick={()=>setSort("cep")}>↕ Por CEP</Btn>
+            {[["smart","↕ Inteligente"],["cep","↕ Por CEP"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setSort(v)} style={{
+                flex:1, padding:"7px 0", fontSize:11, cursor:"pointer", borderRadius:8, fontFamily:"inherit",
+                border:"1px solid #eaecf0",
+                background:sort===v?C.blueDim:"#fff",
+                color:sort===v?C.blue:C.muted,
+                fontWeight:sort===v?600:400,
+              }}>{l}</button>
+            ))}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {listaTodos.length===0&&stores.length===0&&(
-              <div style={{ textAlign:"center", padding:"4rem 0" }}>
-                <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:8 }}>Nenhum PDV cadastrado</div>
-                <div style={{ fontSize:13, color:C.gray }}>Toque em <span style={{color:C.blue,fontWeight:600}}>+ PDV</span> para começar.</div>
+              <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
+                <div style={{ fontSize:48, marginBottom:14 }}>📍</div>
+                <h2 style={{ margin:"0 0 8px", fontSize:18, fontWeight:700, color:C.text }}>Nenhum PDV ainda</h2>
+                <p style={{ margin:0, color:C.muted, fontSize:14 }}>Toque em <strong>+ PDV</strong> para adicionar.</p>
               </div>
             )}
-            {listaTodos.length===0&&stores.length>0&&<div style={{ textAlign:"center", padding:"2rem 0", color:C.gray, fontSize:14 }}>Nenhum PDV encontrado.</div>}
-            {listaTodos.map(s=><PdvCard key={s.id} s={s} {...cardProps} />)}
+            {listaTodos.length===0&&stores.length>0&&<p style={{textAlign:"center",color:C.muted,fontSize:14,padding:"2rem 0"}}>Nenhum PDV encontrado.</p>}
+            {listaTodos.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
           </div>
         </div>
       )}
 
-      {/* ── ABA ROTAS ── */}
+      {/* ABA ROTAS */}
       {aba==="rotas"&&(
-        <div style={{ padding:"16px 16px 0" }}>
-          {agendaHoje.length>0&&(
-            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
-              {agendaHoje.map(item => {
-                const rota = rotas.find(r => r.id === item.rota_id);
-                const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
-                const visitados = pdvsRota.filter(s => daysSince(s.visita)===0).length;
-                const total = pdvsRota.length;
-                return (
-                  <div key={item.id} style={{ background:`linear-gradient(135deg,${C.blue} 0%,${C.blue2} 100%)`, borderRadius:20, padding:"20px", boxShadow:"0 6px 28px rgba(27,58,140,.28)" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-                      <div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", marginBottom:4 }}>
-                          {agendaHoje.length>1?`ROTA ${item.ordem} HOJE`:"ROTA ATIVA HOJE"}
-                        </div>
-                        <div style={{ fontSize:18, fontWeight:800, color:"#fff", letterSpacing:"-.02em", display:"flex", alignItems:"center", gap:7 }}>
-                          <i className="ti ti-map-pin" style={{ fontSize:16, color:C.yellow, flexShrink:0 }} />
-                          {rota?.nome||"—"}
-                        </div>
-                      </div>
-                      <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontSize:"2rem", fontWeight:800, color:C.yellow, lineHeight:1, letterSpacing:"-.04em", fontVariantNumeric:"tabular-nums" }}>
-                          {visitados}<span style={{ fontSize:"1rem", opacity:.5, fontWeight:600 }}>/{total}</span>
-                        </div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,.35)", letterSpacing:".1em", textTransform:"uppercase", marginTop:2 }}>Visitados</div>
-                      </div>
-                    </div>
-                    {total>0&&(
-                      <div style={{ height:6, background:"rgba(255,255,255,.15)", borderRadius:99, overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${(visitados/total)*100}%`, background:C.yellow, borderRadius:99, transition:"width 0.5s cubic-bezier(.4,0,.2,1)" }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+        <div style={{ padding:"1rem" }}>
+          {rotaAtivaObj&&(
+            <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"16px 18px", marginBottom:14, color:"#fff" }}>
+              <p style={{ margin:"0 0 2px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>ROTA ATIVA HOJE</p>
+              <p style={{ margin:"0 0 6px", fontSize:18, fontWeight:700 }}>📍 {rotaAtivaObj.nome}</p>
+              <p style={{ margin:0, fontSize:12, opacity:0.7 }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados</p>
+              {pdvsRotaAtiva.length>0&&(
+                <div style={{ marginTop:10, height:4, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
+                  <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:"#f5c800", borderRadius:99 }} />
+                </div>
+              )}
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {rotas.length===0 ? (
-              <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>Nenhuma rota cadastrada.</div>
+              <p style={{ textAlign:"center", color:C.muted, fontSize:14, padding:"3rem 0" }}>Nenhuma rota cadastrada.</p>
             ) : rotas.map(r=>{
-              const pdvsRota = stores.filter(s=>s.rotaId===r.id).sort(cepCmp);
-              const isHoje   = agendaHoje.some(a => a.rota_id === r.id);
-              const isOpen   = selectedRota === r.id;
+              const qtd=stores.filter(s=>s.rotaId===r.id).length, isActive=rotaAtiva===r.id;
               return (
-                <div key={r.id} style={{ background:C.white, border:`1px solid ${C.border}`, borderLeft:`3px solid ${isHoje?C.yellow:C.border}`, borderRadius:14, overflow:"hidden" }}>
-                  <div
-                    onClick={()=>setSelectedRota(isOpen?null:r.id)}
-                    style={{ padding:"14px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
-                  >
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:600, color:C.text }}>📍 {r.nome}</div>
-                      <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</div>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      {isHoje&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.yellowDim, color:"#92400e" }}>HOJE</span>}
-                      <span style={{ fontSize:14, color:C.gray }}>{isOpen?"▲":"▼"}</span>
-                    </div>
+                <div key={r.id} style={{ background:C.white, borderRadius:14, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,0.06)", borderLeft:`4px solid ${isActive?C.blue:C.grayDim}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <p style={{ margin:"0 0 3px", fontSize:16, fontWeight:700, color:C.text }}>📍 {r.nome}</p>
+                    <p style={{ margin:0, fontSize:12, color:C.muted }}>{qtd} PDV{qtd!==1?"s":""}</p>
                   </div>
-                  {isOpen&&(
-                    <div style={{ borderTop:`1px solid ${C.border}`, padding:"10px 16px 14px" }}>
-                      {pdvsRota.length===0 ? (
-                        <div style={{ fontSize:13, color:C.gray, textAlign:"center", padding:"10px 0" }}>Nenhum PDV nesta rota.</div>
-                      ) : (
-                        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                          {pdvsRota.map(s=>{
-                            const cfg = URGENCIA[getUrgencia(s.visita)];
-                            const d   = s.visita ? daysSince(s.visita) : null;
-                            return (
-                              <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", background:C.grayDim, borderRadius:10, borderLeft:`3px solid ${cfg.barColor}` }}>
-                                <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontSize:13, fontWeight:600, color:C.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.nome}</div>
-                                  {s.end&&<div style={{ fontSize:11, color:C.gray, marginTop:1 }}>{s.end}</div>}
-                                </div>
-                                <div style={{ textAlign:"right", flexShrink:0, marginLeft:10 }}>
-                                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:99, background:cfg.badgeBg, color:cfg.badgeText }}>{cfg.label}</span>
-                                  <div style={{ fontSize:10, color:C.gray, marginTop:3 }}>{d===null?"nunca":d===0?"hoje":`${d}d atrás`}</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {isActive&&<span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.blueDim, color:C.blue }}>ATIVA HOJE</span>}
                 </div>
               );
             })}
@@ -676,90 +306,40 @@ export default function RepView({ onLogout }) {
         </div>
       )}
 
-      {/* ── ABA AGENDA ── */}
-      {aba==="agenda"&&(
-        <div style={{ padding:"16px 16px 0" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
-            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={prevMonth}>‹</Btn>
-            <div style={{ flex:1, textAlign:"center" }}>
-              <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{MONTHS_PT[agendaMonth-1]}</div>
-              <div style={{ fontSize:12, color:C.gray }}>{agendaYear}</div>
-            </div>
-            <Btn variant="ghost" style={{ padding:"10px 16px", fontSize:18 }} onClick={nextMonth}>›</Btn>
-          </div>
-
-          {agendaMes.length === 0 && (
-            <div style={{ textAlign:"center", padding:"3rem 0", color:C.gray, fontSize:13 }}>
-              Nenhuma rota definida para este mês.
-            </div>
-          )}
-
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {Array.from({ length: daysInMonth(agendaYear, agendaMonth) }, (_,i) => i+1).map(dia => {
-              const dateStr = toDateStr(agendaYear, agendaMonth, dia);
-              const items   = agendaMes.filter(a => a.data === dateStr).sort((a,b) => a.ordem-b.ordem);
-              if (items.length === 0) return null;
-              const weekday = WEEKDAY[new Date(dateStr+"T12:00:00").getDay()];
-              const isToday = dateStr === TODAY;
-              const isPast  = dateStr < TODAY;
-              return (
-                <div key={dia} style={{
-                  background: C.white,
-                  border: `1px solid ${isToday ? C.blue : C.border}`,
-                  borderLeft: `3px solid ${isToday ? C.blue : C.yellow}`,
-                  borderRadius:14, padding:"12px 14px",
-                  opacity: isPast && !isToday ? 0.55 : 1,
-                }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                    <div style={{ minWidth:38, textAlign:"center", flexShrink:0 }}>
-                      <div style={{ fontSize:18, fontWeight:700, color: isToday ? C.blue : C.text, lineHeight:1 }}>{padZ(dia)}</div>
-                      <div style={{ fontSize:10, color: isToday ? C.blue : C.gray, fontWeight:600, marginTop:2 }}>{weekday}</div>
-                      {isToday && <div style={{ fontSize:9, color:C.blue, fontWeight:700, letterSpacing:"0.04em", marginTop:2 }}>HOJE</div>}
-                    </div>
-                    <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
-                      {items.map((item, idx) => {
-                        const rota = rotas.find(r => r.id === item.rota_id);
-                        const pdvsRota = stores.filter(s => s.rotaId === item.rota_id);
-                        return (
-                          <div key={item.id} style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            {items.length > 1 && (
-                              <span style={{ fontSize:10, fontWeight:700, color:C.muted, minWidth:12 }}>{idx+1}.</span>
-                            )}
-                            <span style={{ fontSize:13, fontWeight:600, color:C.text }}>📍 {rota?.nome||"—"}</span>
-                            <span style={{ fontSize:11, color:C.gray }}>· {pdvsRota.length} PDV{pdvsRota.length!==1?"s":""}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+      {/* ABA CONSIG */}
+      {aba==="consig"&&(
+        <div style={{ padding:"1rem" }}>
+          {(() => {
+            const consignados = stores.filter(s=>s.consignado);
+            return (
+              <>
+                <div style={{ background:"linear-gradient(135deg,#7c3aed,#9f67fa)", borderRadius:20, padding:"18px 20px", marginBottom:14, color:"#fff" }}>
+                  <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>DISPLAYS CONSIGNADOS</p>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📦 Em campo</p>
+                    <p style={{ margin:0, fontSize:36, fontWeight:700 }}>{consignados.length}</p>
                   </div>
+                  <p style={{ margin:"6px 0 0", fontSize:12, opacity:0.7 }}>PDV{consignados.length!==1?"s":""} com display deixado</p>
                 </div>
-              );
-            })}
-          </div>
+                {consignados.length===0 ? (
+                  <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
+                    <div style={{ fontSize:48, marginBottom:14 }}>📦</div>
+                    <h2 style={{ margin:"0 0 8px", fontSize:18, fontWeight:700, color:"#111827" }}>Nenhum consignado</h2>
+                    <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Toque em 📦 em qualquer PDV para marcar que deixou um display.</p>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {consignados.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
-      {/* BOTTOM NAV */}
-      <nav style={{
-        position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
-        width:"min(440px, 100%)", padding:"8px 16px 24px",
-        background:`linear-gradient(transparent, ${C.bg} 35%)`, zIndex:50,
-      }}>
-        <div style={{ background:C.nav, borderRadius:99, padding:"5px", display:"flex" }}>
-          {NAV_TABS.map(([v, icon, label])=>(
-            <button key={v} onClick={()=>{setAba(v);setShowAdd(false);}} style={{
-              flex:1, padding:"10px 6px", border:"none", cursor:"pointer",
-              borderRadius:94, fontFamily:FONT,
-              background: aba===v ? C.white : "transparent",
-              display:"flex", flexDirection:"column", alignItems:"center", gap:3,
-              transition:"background 0.15s",
-            }}>
-              <i className={`ti ${icon}`} style={{ fontSize:19, color: aba===v ? C.text : "#6b7280" }} />
-              <span style={{ fontSize:10, fontWeight:600, color: aba===v ? C.text : "#6b7280" }}>{label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      <BottomNav aba={aba} setAba={(v)=>{setAba(v);setShowAdd(false);}} tabs={TABS} />
     </div>
   );
+
 }
