@@ -381,8 +381,9 @@ export default function RepView({ onLogout }) {
               const d = new Date(TODAY+"T12:00:00"); d.setDate(d.getDate()+i);
               const ds = d.toISOString().split("T")[0];
               const isToday = i===0;
-              const agItem = agendaSemana.find(a=>a.data===ds);
-              const rota = agItem ? rotas.find(r=>r.id===agItem.rota_id) : null;
+              const agItems = agendaSemana.filter(a=>a.data===ds);
+              const rotasDoDia = agItems.map(a=>rotas.find(r=>r.id===a.rota_id)).filter(Boolean);
+              const hasRoutes = rotasDoDia.length>0;
               const semana = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][d.getDay()];
               const dia = d.toLocaleDateString("pt-BR",{day:"numeric",month:"short"});
               const label = isToday ? `Hoje · ${semana} ${dia}` : `${semana} ${dia}`;
@@ -390,17 +391,21 @@ export default function RepView({ onLogout }) {
                 <div key={ds} style={{
                   borderRadius:14,
                   padding:"14px 16px",
-                  background: isToday ? "#1b3a8c" : rota ? C.white : "#f8f9fc",
+                  background: isToday ? "#1b3a8c" : hasRoutes ? C.white : "#f8f9fc",
                   border: isToday ? "none" : "1px solid #f0f1f6",
-                  boxShadow: rota&&!isToday ? "0 2px 8px rgba(0,0,0,0.05)" : "none",
+                  boxShadow: hasRoutes&&!isToday ? "0 2px 8px rgba(0,0,0,0.05)" : "none",
                 }}>
-                  <p style={{ margin:"0 0 4px", fontSize:11, color: isToday ? "rgba(255,255,255,0.65)" : C.muted, fontWeight:500 }}>
+                  <p style={{ margin:"0 0 6px", fontSize:11, color: isToday ? "rgba(255,255,255,0.65)" : C.muted, fontWeight:500 }}>
                     {label}
                   </p>
-                  {rota ? (
-                    <p style={{ margin:0, fontSize:14, fontWeight:700, color: isToday ? "#fff" : C.text }}>
-                      📍 {rota.nome}
-                    </p>
+                  {hasRoutes ? (
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      {rotasDoDia.map(r=>(
+                        <p key={r.id} style={{ margin:0, fontSize:14, fontWeight:700, color: isToday ? "#fff" : C.text }}>
+                          📍 {r.nome}
+                        </p>
+                      ))}
+                    </div>
                   ) : (
                     <p style={{ margin:0, fontSize:13, color: isToday ? "rgba(255,255,255,0.45)" : C.muted }}>
                       Sem rota programada
