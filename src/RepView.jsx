@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 import { C, ipt, Btn, FormPDV, PdvCardLight, BottomNav, TODAY, daysSince, visitStatus, fromDB, ORDER } from "./ui";
 
@@ -24,6 +24,9 @@ export default function RepView({ onLogout }) {
   const [rotaAgenda, setRotaAgenda] = useState(null);
   const [agendaSemana, setAgendaSemana] = useState([]);
   const [emDiaAberto, setEmDiaAberto] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
+  const [pulsing, setPulsing] = useState(false);
+  const prevPctRef = useRef(-1);
 
   const carregar = useCallback(async () => {
     const d7 = new Date(TODAY+"T12:00:00"); d7.setDate(d7.getDate()+7);
@@ -58,6 +61,30 @@ export default function RepView({ onLogout }) {
       .subscribe();
     return ()=>supabase.removeChannel(ch);
   }, [carregar]);
+
+  useEffect(() => {
+    if (!stores) return;
+    const rotaEf = rotaAgenda?.rota_id || rotaAtiva;
+    const pdvsRota = stores.filter(s => s.rotaId === rotaEf);
+    const total = pdvsRota.length;
+    if (!total) { prevPctRef.current = 0; return; }
+    const visitados = pdvsRota.filter(s => daysSince(s.visita) === 0).length;
+    const pct = Math.round((visitados / total) * 100);
+    const prev = prevPctRef.current;
+    prevPctRef.current = pct;
+    if (prev === -1 || prev === pct) return;
+    for (const m of [25, 50, 75, 100]) {
+      if (prev < m && pct >= m) {
+        setPulsing(true);
+        setTimeout(() => setPulsing(false), 300);
+        break;
+      }
+    }
+    if (pct === 100) {
+      setCelebrating(true);
+      setTimeout(() => setCelebrating(false), 3000);
+    }
+  }, [stores, rotaAgenda, rotaAtiva]);
 
   const adicionar = useCallback(async (form) => {
     setSaving(true);
@@ -129,6 +156,13 @@ export default function RepView({ onLogout }) {
   const fromAgenda     = !!rotaAgenda?.rota_id;
   const totalRota      = pdvsRotaAtiva.length;
   const visitadosRota  = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+  const pct            = totalRota > 0 ? Math.round((visitadosRota / totalRota) * 100) : 0;
+  const motivMsg       = pct === 0   ? "Bora começar a rota de hoje! 💪"
+                       : pct < 25   ? "Boa largada! Continue assim."
+                       : pct < 50   ? "Quase na metade, não para!"
+                       : pct < 75   ? "Metade feita! Você tá voando 🚀"
+                       : pct < 100  ? "Reta final! Falta pouco."
+                       :              "Rota completa! Mandou bem demais 🎉";
 
   const listaTodos = stores
     .filter(s=>{
@@ -176,6 +210,10 @@ export default function RepView({ onLogout }) {
 
   return (
     <div style={{ fontFamily:"'Poppins',sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
+      <style>{`
+        @keyframes celebrate-pulse{0%,100%{opacity:1}50%{opacity:0.55}}
+        @keyframes bar-milestone{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3) drop-shadow(0 0 4px #f5c800)}}
+      `}</style>
 
       {/* HEADER */}
       <div style={{ background:C.white, padding:"1rem 1rem 0", boxShadow:"0 1px 0 #eaecf0" }}>
@@ -210,22 +248,32 @@ export default function RepView({ onLogout }) {
             </div>
           ) : (
             <>
-              <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:16, padding:"14px 16px", marginBottom:16, color:"#fff" }}>
-                <p style={{ margin:"0 0 6px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-                  <p style={{ margin:0, fontSize:16, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", flex:1 }}>
-                    📍 {rotaEfetivaObj?.nome||"—"}
-                  </p>
-                  <p style={{ margin:0, fontSize:22, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?"#a7f3d0":"#f5c800", flexShrink:0 }}>
-                    {visitadosRota}/{totalRota}
-                  </p>
+              {celebrating ? (
+                <div style={{ background:"#16a34a", borderRadius:20, padding:"16px 18px", marginBottom:16, color:"#fff", textAlign:"center" }}>
+                  <i className="ti ti-trophy" style={{ fontSize:44, display:"block", marginBottom:6 }}/>
+                  <p style={{ margin:0, fontSize:17, fontWeight:700, letterSpacing:"0.06em", animation:"celebrate-pulse 1s infinite" }}>MISSÃO COMPLETA</p>
                 </div>
-                {totalRota>0&&(
-                  <div style={{ marginTop:10, height:3, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
-                    <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:"#f5c800", borderRadius:99, transition:"width 0.4s" }} />
+              ) : (
+                <div style={{ background:"#1b3a8c", borderRadius:20, padding:"16px 18px", marginBottom:16, color:"#fff" }}>
+                  <p style={{ margin:"0 0 2px", fontSize:10, color:"rgba(255,255,255,0.6)", letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
+                  <p style={{ margin:"0 0 10px", fontSize:16, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {rotaEfetivaObj?.nome||"—"}
+                  </p>
+                  {totalRota>0&&(
+                    <div style={{ marginBottom:10, height:10, background:"rgba(255,255,255,0.15)", borderRadius:99 }}>
+                      <div style={{
+                        height:"100%", width:`${pct}%`, background:"#f5c800", borderRadius:99,
+                        transition:"width 0.6s ease",
+                        animation: pulsing ? "bar-milestone 300ms ease" : "none",
+                      }}/>
+                    </div>
+                  )}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <p style={{ margin:0, fontSize:12, color:"rgba(255,255,255,0.8)", lineHeight:1.4 }}>{motivMsg}</p>
+                    <p style={{ margin:0, fontSize:15, fontWeight:700, color:"#f5c800", flexShrink:0, marginLeft:10 }}>{visitadosRota}/{totalRota}</p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {showAdd&&(
                 <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
@@ -272,11 +320,6 @@ export default function RepView({ onLogout }) {
                 </div>
               )}
 
-              {totalRota>0&&visitadosRota===totalRota&&(
-                <div style={{ marginTop:12, padding:"14px", background:C.greenDim, border:"1px solid #bbf7d0", borderRadius:14, textAlign:"center" }}>
-                  <p style={{ margin:0, fontSize:14, color:C.green, fontWeight:700 }}>🎉 Rota completa — todos visitados!</p>
-                </div>
-              )}
             </>
           )}
         </div>
