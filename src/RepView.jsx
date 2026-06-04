@@ -22,6 +22,7 @@ export default function RepView({ onLogout }) {
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs, setMarcObs]     = useState("");
   const [rotaAgenda, setRotaAgenda] = useState(null);
+  const [emDiaAberto, setEmDiaAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     const [pdvs, rts, ativa, vis, ag] = await Promise.all([
@@ -137,20 +138,35 @@ export default function RepView({ onLogout }) {
       :b.prio-a.prio||ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
 
   const listaHoje = pdvsRotaAtiva.slice()
-    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]||(a.cep||"").localeCompare(b.cep||""));
+    .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
+
+  // Groups for aba Hoje
+  const grupoUrgente   = listaHoje.filter(s => !s.visita || daysSince(s.visita) >= 30);
+  const grupoPendentes = listaHoje.filter(s => s.visita && daysSince(s.visita) >= 15 && daysSince(s.visita) < 30);
+  const grupoEmDia     = listaHoje.filter(s => s.visita && daysSince(s.visita) < 15);
 
   const cardProps = {
     rotas, expanded, editing, flash, confirmDel, obs,
     setExpanded, setEditing, setConfirmDel, setObs,
     marcar, atualizar, editar, remover, saveObs, saving,
     marcandoId, setMarcandoId, marcObs, setMarcObs, historico,
+    activeRotaId: rotaEfetiva,
   };
 
-  const pendRota = totalRota - visitadosRota;
   const TABS = [["hoje","ti-target","Hoje"],["todos","ti-layout-list","Todos"],["rotas","ti-map-pin","Rotas"],["consig","ti-package","Consig."]];
 
+  // Section header for aba Hoje groups
+  const SecHeader = ({ label, count, color, open, toggle }) => (
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, cursor:toggle?"pointer":"default", userSelect:"none" }} onClick={toggle}>
+      <div style={{ width:3, height:14, borderRadius:2, background:color, flexShrink:0 }} />
+      <span style={{ fontSize:12, fontWeight:700, color }}>{label}</span>
+      <span style={{ fontSize:11, color:C.muted }}>({count})</span>
+      {toggle&&<i className={`ti ${open?"ti-chevron-up":"ti-chevron-down"}`} style={{ fontSize:12, color:C.muted, marginLeft:"auto" }}/>}
+    </div>
+  );
+
   return (
-    <div style={{ fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
+    <div style={{ fontFamily:"'Poppins',sans-serif", background:C.bg, minHeight:"100vh", maxWidth:440, margin:"0 auto", paddingBottom:"100px" }}>
 
       {/* HEADER */}
       <div style={{ background:C.white, padding:"1rem 1rem 0", boxShadow:"0 1px 0 #eaecf0" }}>
@@ -175,7 +191,7 @@ export default function RepView({ onLogout }) {
 
       {/* ABA HOJE */}
       {aba==="hoje"&&(
-        <div style={{ padding:"1rem" }}>
+        <div style={{ padding:"16px" }}>
           {!rotaEfetiva ? (
             <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
               <div style={{ fontSize:48, marginBottom:16 }}>🎯</div>
@@ -186,25 +202,21 @@ export default function RepView({ onLogout }) {
           ) : (
             <>
               {/* Banner de progresso */}
-              <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"18px 20px", marginBottom:14, color:"#fff" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                  <div>
-                    <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
-                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📍 {rotaEfetivaObj?.nome||"—"}</p>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <p style={{ margin:0, fontSize:32, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?"#a7f3d0":"#f5c800" }}>
-                      {visitadosRota}<span style={{fontSize:18,opacity:0.6}}>/{totalRota}</span>
-                    </p>
-                    <p style={{ margin:0, fontSize:10, opacity:0.6, letterSpacing:"0.06em" }}>VISITADOS</p>
-                  </div>
+              <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:16, padding:"14px 16px", marginBottom:16, color:"#fff" }}>
+                <p style={{ margin:"0 0 6px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                  <p style={{ margin:0, fontSize:16, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", flex:1 }}>
+                    📍 {rotaEfetivaObj?.nome||"—"}
+                  </p>
+                  <p style={{ margin:0, fontSize:22, fontWeight:700, color:visitadosRota===totalRota&&totalRota>0?"#a7f3d0":"#f5c800", flexShrink:0 }}>
+                    {visitadosRota}/{totalRota}
+                  </p>
                 </div>
                 {totalRota>0&&(
-                  <div style={{ marginTop:14, height:5, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
+                  <div style={{ marginTop:10, height:3, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
                     <div style={{ height:"100%", width:`${(visitadosRota/totalRota)*100}%`, background:"#f5c800", borderRadius:99, transition:"width 0.4s" }} />
                   </div>
                 )}
-                {totalRota>0&&<p style={{ margin:"8px 0 0", fontSize:11, opacity:0.6 }}>{pendRota} pendente{pendRota!==1?"s":""}</p>}
               </div>
 
               {showAdd&&(
@@ -216,14 +228,41 @@ export default function RepView({ onLogout }) {
                 </div>
               )}
 
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {listaHoje.length===0 ? (
-                  <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
-                    <i className="ti ti-map-pin" style={{fontSize:48,color:"#d1d5db"}}/>
-                    <p style={{ color:C.muted, fontSize:14, marginTop:10 }}>Nenhum PDV nesta rota ainda.</p>
-                  </div>
-                ) : listaHoje.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
-              </div>
+              {listaHoje.length===0 ? (
+                <div style={{ textAlign:"center", padding:"3rem 1rem" }}>
+                  <i className="ti ti-map-pin" style={{fontSize:48,color:"#d1d5db"}}/>
+                  <p style={{ color:C.muted, fontSize:14, marginTop:10 }}>Nenhum PDV nesta rota ainda.</p>
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                  {grupoUrgente.length>0&&(
+                    <div>
+                      <SecHeader label="Urgente" count={grupoUrgente.length} color={C.red}/>
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {grupoUrgente.map(s=><PdvCardLight key={s.id} s={s} {...cardProps}/>)}
+                      </div>
+                    </div>
+                  )}
+                  {grupoPendentes.length>0&&(
+                    <div>
+                      <SecHeader label="Pendentes" count={grupoPendentes.length} color={C.amber}/>
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {grupoPendentes.map(s=><PdvCardLight key={s.id} s={s} {...cardProps}/>)}
+                      </div>
+                    </div>
+                  )}
+                  {grupoEmDia.length>0&&(
+                    <div>
+                      <SecHeader label="Em dia" count={grupoEmDia.length} color={C.green} open={emDiaAberto} toggle={()=>setEmDiaAberto(v=>!v)}/>
+                      {emDiaAberto&&(
+                        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                          {grupoEmDia.map(s=><PdvCardLight key={s.id} s={s} {...cardProps}/>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {totalRota>0&&visitadosRota===totalRota&&(
                 <div style={{ marginTop:12, padding:"14px", background:C.greenDim, border:"1px solid #bbf7d0", borderRadius:14, textAlign:"center" }}>
@@ -237,7 +276,7 @@ export default function RepView({ onLogout }) {
 
       {/* ABA TODOS */}
       {aba==="todos"&&(
-        <div style={{ padding:"1rem" }}>
+        <div style={{ padding:"16px" }}>
           {showAdd&&(
             <div style={{ background:C.white, borderRadius:16, padding:"16px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
               <p style={{margin:"0 0 14px",fontSize:12,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Novo PDV</p>
@@ -247,11 +286,11 @@ export default function RepView({ onLogout }) {
           <input type="text" placeholder="Buscar por nome, endereço ou CEP…" value={search} onChange={e=>setSearch(e.target.value)}
             style={{...ipt, marginBottom:10, background:C.white, boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}} />
           <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-            {[["todos","Todos"],["prio","⭐ Prior."],["pendentes","Pendentes"],["hoje","Hoje"]].map(([v,l])=>(
+            {[["todos","Todos"],["prio","Prioritários"],["pendentes","Pendentes"]].map(([v,l])=>(
               <button key={v} onClick={()=>setFilter(v)} style={{
                 flex:1, padding:"8px 0", fontSize:12, cursor:"pointer", borderRadius:10, border:"none", fontFamily:"inherit",
                 fontWeight:filter===v?700:400,
-                background:filter===v?C.blue:"#ffffff",
+                background:filter===v?"#1b3a8c":"#ffffff",
                 color:filter===v?"#fff":C.muted,
                 boxShadow:filter===v?"0 2px 8px rgba(27,58,140,0.2)":"none",
               }}>{l}</button>
@@ -277,21 +316,21 @@ export default function RepView({ onLogout }) {
               </div>
             )}
             {listaTodos.length===0&&stores.length>0&&<p style={{textAlign:"center",color:C.muted,fontSize:14,padding:"2rem 0"}}>Nenhum PDV encontrado.</p>}
-            {listaTodos.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
+            {listaTodos.map(s=><PdvCardLight key={s.id} s={s} {...cardProps}/>)}
           </div>
         </div>
       )}
 
       {/* ABA ROTAS */}
       {aba==="rotas"&&(
-        <div style={{ padding:"1rem" }}>
+        <div style={{ padding:"16px" }}>
           {rotaAtivaObj&&(
-            <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:20, padding:"16px 18px", marginBottom:14, color:"#fff" }}>
+            <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:16, padding:"14px 16px", marginBottom:14, color:"#fff" }}>
               <p style={{ margin:"0 0 2px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>ROTA ATIVA HOJE</p>
-              <p style={{ margin:"0 0 6px", fontSize:18, fontWeight:700 }}>📍 {rotaAtivaObj.nome}</p>
+              <p style={{ margin:"0 0 6px", fontSize:16, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>📍 {rotaAtivaObj.nome}</p>
               <p style={{ margin:0, fontSize:12, opacity:0.7 }}>{pdvsRotaAtiva.length} PDVs · {visitadosRota} visitados</p>
               {pdvsRotaAtiva.length>0&&(
-                <div style={{ marginTop:10, height:4, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
+                <div style={{ marginTop:10, height:3, background:"rgba(255,255,255,0.2)", borderRadius:99 }}>
                   <div style={{ height:"100%", width:`${(visitadosRota/pdvsRotaAtiva.length)*100}%`, background:"#f5c800", borderRadius:99 }} />
                 </div>
               )}
@@ -318,16 +357,16 @@ export default function RepView({ onLogout }) {
 
       {/* ABA CONSIG */}
       {aba==="consig"&&(
-        <div style={{ padding:"1rem" }}>
+        <div style={{ padding:"16px" }}>
           {(() => {
             const consignados = stores.filter(s=>s.consignado);
             return (
               <>
-                <div style={{ background:"linear-gradient(135deg,#7c3aed,#9f67fa)", borderRadius:20, padding:"18px 20px", marginBottom:14, color:"#fff" }}>
-                  <p style={{ margin:"0 0 4px", fontSize:11, opacity:0.7, letterSpacing:"0.08em" }}>DISPLAYS CONSIGNADOS</p>
+                <div style={{ background:"linear-gradient(135deg,#7c3aed,#9f67fa)", borderRadius:16, padding:"14px 16px", marginBottom:14, color:"#fff" }}>
+                  <p style={{ margin:"0 0 4px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>DISPLAYS CONSIGNADOS</p>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <p style={{ margin:0, fontSize:20, fontWeight:700 }}>📦 Em campo</p>
-                    <p style={{ margin:0, fontSize:36, fontWeight:700 }}>{consignados.length}</p>
+                    <p style={{ margin:0, fontSize:18, fontWeight:700 }}>📦 Em campo</p>
+                    <p style={{ margin:0, fontSize:32, fontWeight:700 }}>{consignados.length}</p>
                   </div>
                   <p style={{ margin:"6px 0 0", fontSize:12, opacity:0.7 }}>PDV{consignados.length!==1?"s":""} com display deixado</p>
                 </div>
@@ -335,11 +374,11 @@ export default function RepView({ onLogout }) {
                   <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
                     <i className="ti ti-package" style={{fontSize:48,color:"#d1d5db"}}/>
                     <h2 style={{ margin:"14px 0 8px", fontSize:18, fontWeight:700, color:"#111827" }}>Nenhum consignado</h2>
-                    <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Toque em 📦 em qualquer PDV para marcar que deixou um display.</p>
+                    <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Toque em <i className="ti ti-package"/> em qualquer PDV para marcar que deixou um display.</p>
                   </div>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {consignados.map(s=><PdvCardLight key={s.id} s={s} {...cardProps} />)}
+                    {consignados.map(s=><PdvCardLight key={s.id} s={s} {...cardProps}/>)}
                   </div>
                 )}
               </>
@@ -351,5 +390,4 @@ export default function RepView({ onLogout }) {
       <BottomNav aba={aba} setAba={(v)=>{setAba(v);setShowAdd(false);}} tabs={TABS} />
     </div>
   );
-
 }

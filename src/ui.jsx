@@ -124,7 +124,8 @@ export function StatCard({ iconClass, iconColor, iconBg, value, label }) {
 export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, obs,
   setExpanded, setEditing, setConfirmDel, setObs,
   marcar, atualizar, editar, remover, saveObs, saving,
-  marcandoId, setMarcandoId, marcObs, setMarcObs, historico }) {
+  marcandoId, setMarcandoId, marcObs, setMarcObs, historico,
+  activeRotaId }) {
 
   const vs = visitStatus(s.visita), cfg = STATUS[vs], days = s.visita?daysSince(s.visita):null;
   const isExp=expanded===s.id, isEdit=editing===s.id, isFlash=flash===s.id;
@@ -133,6 +134,7 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
   const cepFmt = s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):null;
   const rota = rotas.find(r=>r.id===s.rotaId);
   const hist = historico?.[s.id]||[];
+  const showRota = rota && s.rotaId !== activeRotaId;
 
   const statusColor = { ok:C.green, recente:C.amber, atrasado:C.red, nunca:C.grayDim };
   const statusBg    = { ok:C.greenDim, recente:C.amberDim, atrasado:C.redDim, nunca:"#f3f4f6" };
@@ -146,20 +148,19 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
       <div style={{ padding:"14px 14px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
           <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ margin:"0 0 3px", fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3, wordBreak:"break-word" }}>{s.nome}</p>
+            <p style={{ margin:"0 0 3px", fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3, textTransform:"capitalize" }}>{s.nome.toLowerCase()}</p>
             <p style={{ margin:"0 0 7px", fontSize:12, color:C.muted }}>
               {s.end}{cepFmt?<span style={{color:C.grayDim}}> · {cepFmt}</span>:""}
             </p>
             <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
               <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:"#f3f4f6", color:C.muted }}>{TIPO_LABEL[s.tipo]}</span>
-              {rota&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.yellowDim, color:"#92730a" }}>📍 {rota.nome}</span>}
-              {s.prio===1&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.blueDim, color:C.blue }}>⭐ Prior.</span>}
-              {s.vendeu&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.greenDim, color:C.green }}>✓ Vende Dot</span>}
-              {s.consignado&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.purpleDim, color:C.purple }}>📦 Consignado</span>}
+              {showRota&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.yellowDim, color:"#92730a" }}>📍 {rota.nome}</span>}
+              {s.prio===1&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.blueDim, color:C.blue }}>Prior.</span>}
+              {s.vendeu&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.greenDim, color:C.green }}>Vende Dot</span>}
             </div>
           </div>
           <div style={{ textAlign:"right", flexShrink:0 }}>
-            <span style={{ fontSize:11, fontWeight:700, padding:"4px 9px", borderRadius:99, background:statusBg[vs], color:statusColor[vs]||C.muted, display:"block", marginBottom:3 }}>
+            <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:6, background:statusBg[vs], color:statusColor[vs]||C.muted, display:"block", marginBottom:3 }}>
               {cfg.label}
             </span>
             <span style={{ fontSize:11, color:C.muted, fontFamily:"monospace" }}>
@@ -184,17 +185,22 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
           </>
         ) : (
           <>
-            <Btn variant={isFlash||isOk?"green":isOk?"green":"yellow"} style={{flex:1,padding:"11px 0",cursor:isOk?"default":"pointer",opacity:isOk?0.7:1}}
+            <Btn variant={isFlash||isOk?"green":"yellow"} style={{flex:1,padding:"11px 0",cursor:isOk?"default":"pointer",opacity:isOk?0.7:1}}
               onClick={()=>!isOk&&setMarcandoId(s.id)}>
               {isFlash?"✓ Registrado!":isOk?"✓ Visitado hoje":"Marcar visita"}
             </Btn>
             <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
               {s.vendeu?"Dot ✓":"+ Dot"}
             </Btn>
-            <Btn variant="ghost" style={{padding:"11px 10px",fontSize:14,background:s.consignado?C.purpleDim:"",color:s.consignado?C.purple:"",border:s.consignado?`1px solid #c4b5fd`:""}}
+            <button style={{
+              padding:"11px 10px",cursor:"pointer",borderRadius:10,border:"none",
+              background:s.consignado?C.purpleDim:"#f5f6fa",
+              color:s.consignado?C.purple:C.muted,
+              fontFamily:"inherit",lineHeight:1,
+            }}
               onClick={()=>atualizar(s.id,{Consignado:!s.consignado})} title={s.consignado?"Remover consignado":"Marcar como consignado"}>
-              📦
-            </Btn>
+              <i className="ti ti-package" style={{fontSize:16,display:"block"}}/>
+            </button>
             <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 10px"}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
               {isExp?"▲":"▼"}
             </Btn>
