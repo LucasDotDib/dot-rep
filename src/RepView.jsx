@@ -36,7 +36,7 @@ export default function RepView({ onLogout }) {
       supabase.from("rotas").select("*").order("nome",{ascending:true}),
       supabase.from("rota_ativa").select("*").eq("id",1).single(),
       supabase.from("visitas").select("*").order("criado_em",{ascending:false}),
-      supabase.from("agenda").select("*").eq("data",TODAY).maybeSingle(),
+      supabase.from("agenda").select("*").eq("data",TODAY).order("ordem",{ascending:true}),
       supabase.from("agenda").select("*").gte("data",TODAY).lte("data",endDate),
     ]);
     if (pdvs.error) { setErro(pdvs.error.message); return; }
@@ -44,7 +44,7 @@ export default function RepView({ onLogout }) {
     setRotas(rts.data||[]);
     const ativaHoje = ativa.data?.rota_id && ativa.data?.ativada_em?.startsWith(TODAY);
     setRotaAtiva(ativaHoje ? ativa.data.rota_id : null);
-    setRotaAgenda(ag.data||null);
+    setRotaAgenda((ag.data&&ag.data.length>0)?ag.data[0]:null);
     setAgendaSemana(agSem.data||[]);
     const hist={};
     for (const v of (vis.data||[])) { if(!hist[v.pdv_id])hist[v.pdv_id]=[]; hist[v.pdv_id].push({id:v.id,data:v.data,obs:v.obs||""}); }

@@ -22,7 +22,7 @@ export default function AdminView({ onLogout }) {
   const [calYear, setCalYear]         = useState(new Date().getFullYear());
   const [calMonth, setCalMonth]       = useState(new Date().getMonth());
   const [diaAberto, setDiaAberto]     = useState(null);
-  const [rotaParaDia, setRotaParaDia] = useState("");
+  const [novaRotaDia, setNovaRotaDia] = useState("");
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [filterPdv, setFilterPdv]     = useState("todos");
   const [filterRotaId, setFilterRotaId] = useState("");
@@ -120,19 +120,21 @@ export default function AdminView({ onLogout }) {
     if(error) setErro(error.message); else setConfirmDesativar(false);
   }, []);
 
-  const salvarAgenda = useCallback(async (data, rotaId) => {
+  const adicionarRotaDia = useCallback(async (data, rotaId) => {
+    if (!rotaId) return;
+    const jaExiste = agenda.some(a => a.data === data && a.rota_id === rotaId);
+    if (jaExiste) return;
     setSavingAgenda(true);
-    const existing = agenda.find(a => a.data === data);
-    if (existing) {
-      if (rotaId) await supabase.from("agenda").update({rota_id:rotaId}).eq("data",data);
-      else await supabase.from("agenda").delete().eq("data",data);
-    } else if (rotaId) {
-      await supabase.from("agenda").insert([{id:Date.now().toString(),data,rota_id:rotaId,ordem:0}]);
-    }
+    await supabase.from("agenda").insert([{id:Date.now().toString(), data, rota_id:rotaId, ordem:0}]);
     setSavingAgenda(false);
-    setDiaAberto(null);
+    setNovaRotaDia("");
     await carregar();
   }, [agenda, carregar]);
+
+  const removerRotaDia = useCallback(async (id) => {
+    await supabase.from("agenda").delete().eq("id", id);
+    await carregar();
+  }, [carregar]);
 
   if (!stores) return (
     <div style={{ background:C.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -617,8 +619,6 @@ export default function AdminView({ onLogout }) {
             ))}
           </div>
           {(()=>{
-            const agendaMap={};
-            agenda.forEach(a=>{agendaMap[a.data]=a.rota_id;});
             const firstDow=new Date(calYear,calMonth,1).getDay();
             const startOff=firstDow===0?6:firstDow-1;
             const daysInM=new Date(calYear,calMonth+1,0).getDate();
@@ -629,37 +629,72 @@ export default function AdminView({ onLogout }) {
                   {Array(daysInM).fill(null).map((_,i)=>{
                     const day=i+1;
                     const ds=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-                    const rotaId=agendaMap[ds];
-                    const rota=rotaId?rotas.find(r=>r.id===rotaId):null;
+                    const dayEntries=agenda.filter(a=>a.data===ds);
+                    const hasRoutes=dayEntries.length>0;
+                    const firstRota=hasRoutes?rotas.find(r=>r.id===dayEntries[0].rota_id):null;
                     const isToday=ds===TODAY,isPast=ds<TODAY,isOpen=diaAberto===ds;
                     return (
-                      <div key={day} onClick={()=>{setDiaAberto(isOpen?null:ds);setRotaParaDia(rotaId||"");}}
+                      <div key={day} onClick={()=>{setDiaAberto(isOpen?null:ds);setNovaRotaDia("");}}
                         style={{
                           borderRadius:10,padding:"6px 4px",textAlign:"center",cursor:"pointer",
-                          background:rota?C.blue:isOpen?C.blueDim:C.white,
+                          background:hasRoutes?C.blue:isOpen?C.blueDim:C.white,
                           border:isToday?`2px solid ${C.yellow}`:`1px solid ${C.border}`,
                           opacity:isPast?0.5:1,minHeight:48,
                         }}>
-                        <p style={{margin:"0 0 2px",fontSize:12,fontWeight:700,color:rota?"#fff":C.text}}>{day}</p>
-                        {rota&&<p style={{margin:0,fontSize:8,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"0 2px"}}>{rota.nome}</p>}
+                        <p style={{margin:"0 0 2px",fontSize:12,fontWeight:700,color:hasRoutes?"#fff":C.text}}>{day}</p>
+                        {hasRoutes&&(
+                          <p style={{margin:0,fontSize:8,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"0 2px"}}>
+                            {dayEntries.length>1?`${dayEntries.length} rotas`:firstRota?.nome||""}
+                          </p>
+                        )}
                       </div>
                     );
                   })}
                 </div>
-                {diaAberto&&(
-                  <div style={{background:C.white,borderRadius:16,padding:16,marginTop:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-                    <p style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:C.text}}>
-                      {new Date(diaAberto+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
-                    </p>
-                    <select value={rotaParaDia} onChange={e=>setRotaParaDia(e.target.value)} style={{...ipt,marginBottom:10}}>
-                      <option value="">— Sem rota —</option>
-                      {rotas.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
-                    </select>
-                    <Btn variant="blue" style={{width:"100%",padding:"11px 0"}} onClick={()=>salvarAgenda(diaAberto,rotaParaDia||null)}>
-                      {savingAgenda?"Salvando…":"Salvar"}
-                    </Btn>
-                  </div>
-                )}
+                {diaAberto&&(()=>{
+                  const dayEntries=agenda.filter(a=>a.data===diaAberto);
+                  const rotasNoDia=dayEntries.map(a=>({...a,rota:rotas.find(r=>r.id===a.rota_id)}));
+                  const rotasDisponiveis=rotas.filter(r=>!dayEntries.some(a=>a.rota_id===r.id));
+                  return (
+                    <div style={{background:C.white,borderRadius:16,padding:16,marginTop:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
+                      <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:C.text}}>
+                        {new Date(diaAberto+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
+                      </p>
+                      {rotasNoDia.length===0 ? (
+                        <p style={{margin:"0 0 12px",fontSize:12,color:C.muted,fontStyle:"italic"}}>Nenhuma rota alocada.</p>
+                      ) : (
+                        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+                          {rotasNoDia.map(entry=>(
+                            <div key={entry.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"#f0f4ff",borderRadius:10}}>
+                              <span style={{fontSize:13,fontWeight:600,color:C.blue}}>📍 {entry.rota?.nome||"—"}</span>
+                              <button onClick={()=>removerRotaDia(entry.id)} style={{
+                                background:"none",border:"none",cursor:"pointer",padding:"2px 6px",
+                                fontSize:16,color:C.muted,lineHeight:1,borderRadius:6,
+                              }}>×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {rotasDisponiveis.length>0&&(
+                        <>
+                          <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>Adicionar rota</p>
+                          <div style={{display:"flex",gap:8}}>
+                            <select value={novaRotaDia} onChange={e=>setNovaRotaDia(e.target.value)}
+                              style={{...ipt,flex:1,padding:"10px 14px"}}>
+                              <option value="">Escolher…</option>
+                              {rotasDisponiveis.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
+                            </select>
+                            <Btn variant={novaRotaDia?"blue":"ghost"} style={{padding:"11px 16px",opacity:novaRotaDia?1:0.4}}
+                              onClick={()=>adicionarRotaDia(diaAberto,novaRotaDia)}>
+                              {savingAgenda?"…":"+"}
+                            </Btn>
+                          </div>
+                        </>
+                      )}
+                      <Btn variant="ghost" style={{width:"100%",padding:"10px 0",marginTop:10,fontSize:12}} onClick={()=>setDiaAberto(null)}>Fechar</Btn>
+                    </div>
+                  );
+                })()}
               </>
             );
           })()}
