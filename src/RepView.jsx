@@ -22,21 +22,26 @@ export default function RepView({ onLogout }) {
   const [marcandoId, setMarcandoId] = useState(null);
   const [marcObs, setMarcObs]     = useState("");
   const [rotaAgenda, setRotaAgenda] = useState(null);
+  const [agendaSemana, setAgendaSemana] = useState([]);
   const [emDiaAberto, setEmDiaAberto] = useState(false);
 
   const carregar = useCallback(async () => {
-    const [pdvs, rts, ativa, vis, ag] = await Promise.all([
+    const d7 = new Date(TODAY+"T12:00:00"); d7.setDate(d7.getDate()+7);
+    const endDate = d7.toISOString().split("T")[0];
+    const [pdvs, rts, ativa, vis, ag, agSem] = await Promise.all([
       supabase.from("pdvs").select("*").order("criado_em",{ascending:true}),
       supabase.from("rotas").select("*").order("nome",{ascending:true}),
       supabase.from("rota_ativa").select("*").eq("id",1).single(),
       supabase.from("visitas").select("*").order("criado_em",{ascending:false}),
       supabase.from("agenda").select("*").eq("data",TODAY).maybeSingle(),
+      supabase.from("agenda").select("*").gte("data",TODAY).lte("data",endDate),
     ]);
     if (pdvs.error) { setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setRotas(rts.data||[]);
     setRotaAtiva(ativa.data?.rota_id||null);
     setRotaAgenda(ag.data||null);
+    setAgendaSemana(agSem.data||[]);
     const hist={};
     for (const v of (vis.data||[])) { if(!hist[v.pdv_id])hist[v.pdv_id]=[]; hist[v.pdv_id].push({id:v.id,data:v.data,obs:v.obs||""}); }
     setHistorico(hist);
@@ -140,7 +145,6 @@ export default function RepView({ onLogout }) {
   const listaHoje = pdvsRotaAtiva.slice()
     .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)]);
 
-  // Groups for aba Hoje
   const grupoUrgente   = listaHoje.filter(s => !s.visita || daysSince(s.visita) >= 30);
   const grupoPendentes = listaHoje.filter(s => s.visita && daysSince(s.visita) >= 15 && daysSince(s.visita) < 30);
   const grupoEmDia     = listaHoje.filter(s => s.visita && daysSince(s.visita) < 15);
@@ -153,9 +157,14 @@ export default function RepView({ onLogout }) {
     activeRotaId: rotaEfetiva,
   };
 
-  const TABS = [["hoje","ti-target","Hoje"],["todos","ti-layout-list","Todos"],["rotas","ti-map-pin","Rotas"],["consig","ti-package","Consig."]];
+  const TABS = [
+    ["hoje","ti-target","Hoje"],
+    ["todos","ti-layout-list","Todos"],
+    ["agenda","ti-calendar","Agenda"],
+    ["rotas","ti-map-pin","Rotas"],
+    ["consig","ti-package","Consig."],
+  ];
 
-  // Section header for aba Hoje groups
   const SecHeader = ({ label, count, color, open, toggle }) => (
     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, cursor:toggle?"pointer":"default", userSelect:"none" }} onClick={toggle}>
       <div style={{ width:3, height:14, borderRadius:2, background:color, flexShrink:0 }} />
@@ -179,7 +188,7 @@ export default function RepView({ onLogout }) {
             </div>
           </div>
           <div style={{ display:"flex", gap:6 }}>
-            {aba!=="rotas"&&(
+            {(aba==="hoje"||aba==="todos")&&(
               <Btn variant={showAdd?"danger":"blue"} style={{padding:"8px 14px",fontSize:12}} onClick={()=>{setShowAdd(v=>!v);setEditing(null);}}>
                 {showAdd?"✕":"+ PDV"}
               </Btn>
@@ -201,7 +210,6 @@ export default function RepView({ onLogout }) {
             </div>
           ) : (
             <>
-              {/* Banner de progresso */}
               <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:16, padding:"14px 16px", marginBottom:16, color:"#fff" }}>
                 <p style={{ margin:"0 0 6px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>{fromAgenda?"ROTA DO DIA":"ROTA ATIVA"}</p>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
@@ -321,6 +329,46 @@ export default function RepView({ onLogout }) {
         </div>
       )}
 
+      {/* ABA AGENDA */}
+      {aba==="agenda"&&(
+        <div style={{ padding:"16px" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {Array(7).fill(null).map((_,i)=>{
+              const d = new Date(TODAY+"T12:00:00"); d.setDate(d.getDate()+i);
+              const ds = d.toISOString().split("T")[0];
+              const isToday = i===0;
+              const agItem = agendaSemana.find(a=>a.data===ds);
+              const rota = agItem ? rotas.find(r=>r.id===agItem.rota_id) : null;
+              const semana = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][d.getDay()];
+              const dia = d.toLocaleDateString("pt-BR",{day:"numeric",month:"short"});
+              const label = isToday ? `Hoje · ${semana} ${dia}` : `${semana} ${dia}`;
+              return (
+                <div key={ds} style={{
+                  borderRadius:14,
+                  padding:"14px 16px",
+                  background: isToday ? "#1b3a8c" : rota ? C.white : "#f8f9fc",
+                  border: isToday ? "none" : "1px solid #f0f1f6",
+                  boxShadow: rota&&!isToday ? "0 2px 8px rgba(0,0,0,0.05)" : "none",
+                }}>
+                  <p style={{ margin:"0 0 4px", fontSize:11, color: isToday ? "rgba(255,255,255,0.65)" : C.muted, fontWeight:500 }}>
+                    {label}
+                  </p>
+                  {rota ? (
+                    <p style={{ margin:0, fontSize:14, fontWeight:700, color: isToday ? "#fff" : C.text }}>
+                      📍 {rota.nome}
+                    </p>
+                  ) : (
+                    <p style={{ margin:0, fontSize:13, color: isToday ? "rgba(255,255,255,0.45)" : C.muted }}>
+                      Sem rota programada
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ABA ROTAS */}
       {aba==="rotas"&&(
         <div style={{ padding:"16px" }}>
@@ -347,7 +395,7 @@ export default function RepView({ onLogout }) {
                     <p style={{ margin:"0 0 3px", fontSize:16, fontWeight:700, color:C.text }}>📍 {r.nome}</p>
                     <p style={{ margin:0, fontSize:12, color:C.muted }}>{qtd} PDV{qtd!==1?"s":""}</p>
                   </div>
-                  {isActive&&<span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.blueDim, color:C.blue }}>ATIVA HOJE</span>}
+                  {isActive&&<span style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99, background:C.blueDim, color:C.blue, whiteSpace:"nowrap" }}>ATIVA HOJE</span>}
                 </div>
               );
             })}
@@ -362,7 +410,7 @@ export default function RepView({ onLogout }) {
             const consignados = stores.filter(s=>s.consignado);
             return (
               <>
-                <div style={{ background:"linear-gradient(135deg,#7c3aed,#9f67fa)", borderRadius:16, padding:"14px 16px", marginBottom:14, color:"#fff" }}>
+                <div style={{ background:"linear-gradient(135deg,#1b3a8c,#2d52b8)", borderRadius:16, padding:"14px 16px", marginBottom:14, color:"#fff" }}>
                   <p style={{ margin:"0 0 4px", fontSize:10, opacity:0.7, letterSpacing:"0.08em" }}>DISPLAYS CONSIGNADOS</p>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <p style={{ margin:0, fontSize:18, fontWeight:700 }}>📦 Em campo</p>
@@ -374,7 +422,7 @@ export default function RepView({ onLogout }) {
                   <div style={{ textAlign:"center", padding:"4rem 1rem" }}>
                     <i className="ti ti-package" style={{fontSize:48,color:"#d1d5db"}}/>
                     <h2 style={{ margin:"14px 0 8px", fontSize:18, fontWeight:700, color:"#111827" }}>Nenhum consignado</h2>
-                    <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Toque em <i className="ti ti-package"/> em qualquer PDV para marcar que deixou um display.</p>
+                    <p style={{ margin:0, color:"#6b7280", fontSize:14 }}>Abra um card e toque em "Marcar" para registrar um display consignado.</p>
                   </div>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>

@@ -132,9 +132,7 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
   const isDel=confirmDel===s.id, isOk=vs==="ok", isMarcando=marcandoId===s.id;
   const obsVal = obs[s.id]!==undefined?obs[s.id]:(s.obs||"");
   const cepFmt = s.cep?s.cep.slice(0,5)+(s.cep.length>5?"-"+s.cep.slice(5):""):null;
-  const rota = rotas.find(r=>r.id===s.rotaId);
   const hist = historico?.[s.id]||[];
-  const showRota = rota && s.rotaId !== activeRotaId;
 
   const statusColor = { ok:C.green, recente:C.amber, atrasado:C.red, nunca:C.grayDim };
   const statusBg    = { ok:C.greenDim, recente:C.amberDim, atrasado:C.redDim, nunca:"#f3f4f6" };
@@ -154,8 +152,7 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
             </p>
             <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
               <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:"#f3f4f6", color:C.muted }}>{TIPO_LABEL[s.tipo]}</span>
-              {showRota&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.yellowDim, color:"#92730a" }}>📍 {rota.nome}</span>}
-              {s.prio===1&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.blueDim, color:C.blue }}>Prior.</span>}
+              {s.prio===1&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:"#eff6ff", color:"#1b3a8c" }}>Prior.</span>}
               {s.vendeu&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:C.greenDim, color:C.green }}>Vende Dot</span>}
             </div>
           </div>
@@ -192,15 +189,6 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
             <Btn variant={s.vendeu?"green":"ghost"} style={{padding:"11px 10px",fontSize:12}} onClick={()=>atualizar(s.id,{vendeu_dot:!s.vendeu})}>
               {s.vendeu?"Dot ✓":"+ Dot"}
             </Btn>
-            <button style={{
-              padding:"11px 10px",cursor:"pointer",borderRadius:10,border:"none",
-              background:s.consignado?C.purpleDim:"#f5f6fa",
-              color:s.consignado?C.purple:C.muted,
-              fontFamily:"inherit",lineHeight:1,
-            }}
-              onClick={()=>atualizar(s.id,{Consignado:!s.consignado})} title={s.consignado?"Remover consignado":"Marcar como consignado"}>
-              <i className="ti ti-package" style={{fontSize:16,display:"block"}}/>
-            </button>
             <Btn variant={isExp?"default":"ghost"} style={{padding:"11px 10px"}} onClick={()=>{setExpanded(isExp?null:s.id);setEditing(null);setConfirmDel(null);}}>
               {isExp?"▲":"▼"}
             </Btn>
@@ -218,6 +206,20 @@ export function PdvCardLight({ s, rotas, expanded, editing, flash, confirmDel, o
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #f3f4f6" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <i className="ti ti-package" style={{ fontSize:15, color:s.consignado?C.purple:C.muted }}/>
+                  <span style={{ fontSize:13, color:C.text }}>Display consignado</span>
+                </div>
+                <button style={{
+                  padding:"5px 12px", borderRadius:8, border:"none", cursor:"pointer",
+                  fontFamily:"inherit", fontSize:12, fontWeight:600,
+                  background:s.consignado?C.purpleDim:"#f5f6fa",
+                  color:s.consignado?C.purple:C.muted,
+                }} onClick={()=>atualizar(s.id,{Consignado:!s.consignado})}>
+                  {s.consignado?"Remover":"Marcar"}
+                </button>
+              </div>
               <div>
                 <p style={{margin:"0 0 5px",fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Observações</p>
                 <textarea rows={2} value={obsVal} placeholder="Anotação sobre o PDV…"
