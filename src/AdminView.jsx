@@ -157,6 +157,14 @@ export default function AdminView({ onLogout }) {
   const rotaAtivaObj  = rotas.find(r=>r.id===rotaEfetiva);
   const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaEfetiva);
   const visitadosHoje = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
+  const rotasEfetivas = agendaHoje.length>0
+    ? agendaHoje.map(a=>rotas.find(r=>r.id===a.rota_id)).filter(Boolean)
+    : rotaAtiva ? [rotas.find(r=>r.id===rotaAtiva)].filter(Boolean) : [];
+  const statsRotas = rotasEfetivas.map(r=>{
+    const pdvs=stores.filter(s=>s.rotaId===r.id);
+    const visitados=pdvs.filter(s=>daysSince(s.visita)===0).length;
+    return {rota:r, pdvs, visitados, pct:pdvs.length>0?Math.round((visitados/pdvs.length)*100):0};
+  });
   const visitasPorPdv = {};
   for (const v of visitas) { if(!visitasPorPdv[v.pdv_id])visitasPorPdv[v.pdv_id]=[]; visitasPorPdv[v.pdv_id].push(v); }
   const visitasDoDia    = visitas.filter(v=>v.data===selectedDate);
@@ -205,23 +213,46 @@ export default function AdminView({ onLogout }) {
       {aba==="geral"&&(
         <div style={{padding:"1rem"}}>
           <div style={{background:"linear-gradient(135deg,#1b3a8c,#2d52b8)",borderRadius:20,padding:"18px 20px",marginBottom:16,color:"#fff"}}>
-            <p style={{margin:"0 0 4px",fontSize:10,opacity:0.7,letterSpacing:"0.08em"}}>ROTA ATIVA HOJE</p>
-            {rotaAtivaObj ? (
-              <>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <p style={{margin:0,fontSize:16,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📍 {rotaAtivaObj.nome}</p>
-                  <p style={{margin:0,fontSize:28,fontWeight:700,color:visitadosHoje===pdvsRotaAtiva.length&&pdvsRotaAtiva.length>0?"#a7f3d0":"#f5c800"}}>
-                    {pdvsRotaAtiva.length>0?Math.round((visitadosHoje/pdvsRotaAtiva.length)*100):0}%
-                  </p>
-                </div>
-                <p style={{margin:"0 0 8px",fontSize:12,opacity:0.7}}>{visitadosHoje} de {pdvsRotaAtiva.length} visitados</p>
-                {pdvsRotaAtiva.length>0&&(
-                  <div style={{height:4,background:"rgba(255,255,255,0.2)",borderRadius:99}}>
-                    <div style={{height:"100%",width:`${(visitadosHoje/pdvsRotaAtiva.length)*100}%`,background:"#f5c800",borderRadius:99,transition:"width 0.4s"}}/>
+            <p style={{margin:"0 0 10px",fontSize:10,opacity:0.7,letterSpacing:"0.08em"}}>
+              {statsRotas.length>1?`ROTAS DO DIA (${statsRotas.length})`:"ROTA DO DIA"}
+            </p>
+            {statsRotas.length===0 ? (
+              <p style={{margin:0,fontSize:14,opacity:0.7}}>Nenhuma rota ativa.</p>
+            ) : statsRotas.length===1 ? (()=>{
+              const {rota,pdvs,visitados,pct}=statsRotas[0];
+              return (
+                <>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <p style={{margin:0,fontSize:16,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📍 {rota.nome}</p>
+                    <p style={{margin:0,fontSize:28,fontWeight:700,color:visitados===pdvs.length&&pdvs.length>0?"#a7f3d0":"#f5c800"}}>{pct}%</p>
                   </div>
-                )}
-              </>
-            ) : <p style={{margin:0,fontSize:14,opacity:0.7}}>Nenhuma rota ativa.</p>}
+                  <p style={{margin:"0 0 8px",fontSize:12,opacity:0.7}}>{visitados} de {pdvs.length} visitados</p>
+                  {pdvs.length>0&&(
+                    <div style={{height:4,background:"rgba(255,255,255,0.2)",borderRadius:99}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:"#f5c800",borderRadius:99,transition:"width 0.4s"}}/>
+                    </div>
+                  )}
+                </>
+              );
+            })() : (
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {statsRotas.map(({rota,pdvs,visitados,pct})=>(
+                  <div key={rota.id}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                      <p style={{margin:0,fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>📍 {rota.nome}</p>
+                      <p style={{margin:0,fontSize:13,fontWeight:700,color:visitados===pdvs.length&&pdvs.length>0?"#a7f3d0":"#f5c800",flexShrink:0,marginLeft:8}}>
+                        {visitados}/{pdvs.length}
+                      </p>
+                    </div>
+                    {pdvs.length>0&&(
+                      <div style={{height:4,background:"rgba(255,255,255,0.2)",borderRadius:99}}>
+                        <div style={{height:"100%",width:`${pct}%`,background:"#f5c800",borderRadius:99,transition:"width 0.4s"}}/>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
@@ -280,17 +311,26 @@ export default function AdminView({ onLogout }) {
             );
           })()}
 
-          {rotaAtivaObj&&pdvsRotaAtiva.length>0&&(
+          {statsRotas.length>0&&(
             <div style={{background:C.white,borderRadius:16,padding:"14px",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-              <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>Pendentes na rota</p>
-              {pdvsRotaAtiva.filter(s=>daysSince(s.visita)!==0).length===0 ? (
+              <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>Pendentes nas rotas</p>
+              {statsRotas.every(({pdvs})=>pdvs.filter(s=>daysSince(s.visita)!==0).length===0) ? (
                 <p style={{margin:0,textAlign:"center",color:C.green,fontSize:13,fontWeight:600,padding:"8px 0"}}>🎉 Todos visitados hoje!</p>
-              ) : pdvsRotaAtiva.filter(s=>daysSince(s.visita)!==0).map(s=>(
-                <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #f3f4f6"}}>
-                  <span style={{fontSize:13,color:C.text}}>{s.nome}</span>
-                  <span style={{fontSize:12,color:C.muted}}>{s.visita?`${daysSince(s.visita)}d atrás`:"nunca"}</span>
-                </div>
-              ))}
+              ) : statsRotas.map(({rota,pdvs},i)=>{
+                const pendentes=pdvs.filter(s=>daysSince(s.visita)!==0);
+                if(!pendentes.length) return null;
+                return (
+                  <div key={rota.id} style={{marginBottom:i<statsRotas.length-1?12:0}}>
+                    {statsRotas.length>1&&<p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:C.blue}}>📍 {rota.nome}</p>}
+                    {pendentes.map(s=>(
+                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f3f4f6"}}>
+                        <span style={{fontSize:13,color:C.text}}>{s.nome}</span>
+                        <span style={{fontSize:12,color:C.muted}}>{s.visita?`${daysSince(s.visita)}d atrás`:"nunca"}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
