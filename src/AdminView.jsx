@@ -25,6 +25,8 @@ export default function AdminView({ onLogout }) {
   const [rotaParaDia, setRotaParaDia] = useState("");
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [filterPdv, setFilterPdv]     = useState("todos");
+  const [filterRotaId, setFilterRotaId] = useState("");
+  const [expandedRota, setExpandedRota] = useState(null);
   const [layout, setLayout]           = useState(() => localStorage.getItem("admin_layout")||"mobile");
   const [editPdv, setEditPdv]         = useState(null);
 
@@ -165,7 +167,7 @@ export default function AdminView({ onLogout }) {
 
   const TAB_TITLES = {
     geral:"Geral", historico:"Histórico", pdvs:"PDVs",
-    rotas:"Rotas", consig:"Consignados", agenda:"Agenda Mensal", pendentes:"Pendentes",
+    rotas:"Rotas", consig:"Consignados", agenda:"Agenda Mensal",
   };
 
   const LayoutToggle = () => (
@@ -353,7 +355,12 @@ export default function AdminView({ onLogout }) {
           )}
           <input type="text" placeholder="Buscar PDV…" value={searchPdv}
             onChange={e=>{setSearchPdv(e.target.value);setSelectedPdv(null);}}
-            style={{...ipt,marginBottom:12,background:C.white,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}/>
+            style={{...ipt,marginBottom:8,background:C.white,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}/>
+          <select value={filterRotaId} onChange={e=>{setFilterRotaId(e.target.value);setSelectedPdv(null);}}
+            style={{...ipt,marginBottom:12,background:C.white,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",padding:"10px 14px"}}>
+            <option value="">Todas as rotas</option>
+            {rotas.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
+          </select>
           <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
             {[["todos","Todos"],["vende","Vende Dot"],["naovende","Não vende"],["consig","Com consig."]].map(([v,l])=>(
               <button key={v} onClick={()=>setFilterPdv(v)} style={{
@@ -369,10 +376,11 @@ export default function AdminView({ onLogout }) {
               .filter(s=>{
                 const q=searchPdv.toLowerCase();
                 const textMatch=!q||s.nome.toLowerCase().includes(q)||(s.end||"").toLowerCase().includes(q);
-                if(filterPdv==="vende")    return textMatch&&s.vendeu;
-                if(filterPdv==="naovende") return textMatch&&!s.vendeu;
-                if(filterPdv==="consig")   return textMatch&&s.consignado;
-                return textMatch;
+                const rotaMatch=!filterRotaId||s.rotaId===filterRotaId;
+                if(filterPdv==="vende")    return textMatch&&rotaMatch&&s.vendeu;
+                if(filterPdv==="naovende") return textMatch&&rotaMatch&&!s.vendeu;
+                if(filterPdv==="consig")   return textMatch&&rotaMatch&&s.consignado;
+                return textMatch&&rotaMatch;
               })
               .sort((a,b)=>ORDER[visitStatus(a.visita)]-ORDER[visitStatus(b.visita)])
               .map(s=>{
@@ -448,86 +456,78 @@ export default function AdminView({ onLogout }) {
                 <p style={{color:C.muted,fontSize:14,marginTop:10}}>Nenhuma rota criada ainda.</p>
               </div>
             ) : rotas.map(r=>{
-              const qtd=stores.filter(s=>s.rotaId===r.id).length,isActive=rotaAtiva===r.id;
+              const pdvsRota=stores.filter(s=>s.rotaId===r.id);
+              const qtd=pdvsRota.length,isActive=rotaAtiva===r.id;
               const isEditingR=editRota?.id===r.id,isDelR=confirmDelRota===r.id;
+              const isExpR=expandedRota===r.id;
               return (
-                <div key={r.id} style={{background:C.white,borderRadius:16,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${isActive?C.blue:C.grayDim}`}}>
-                  {isEditingR ? (
-                    <div style={{display:"flex",gap:6}}>
-                      <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus/>
-                      <Btn variant="blue" style={{padding:"11px 14px",fontSize:12}} onClick={()=>renomearRota(r.id,editRota.nome)}>OK</Btn>
-                      <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12}} onClick={()=>setEditRota(null)}>✕</Btn>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                        <div>
-                          <p style={{margin:"0 0 3px",fontSize:16,fontWeight:700,color:C.text}}>📍 {r.nome}</p>
-                          <p style={{margin:0,fontSize:12,color:C.muted}}>{qtd} PDV{qtd!==1?"s":""}</p>
-                        </div>
-                        {isActive&&<span style={{fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99,background:C.blueDim,color:C.blue}}>ATIVA HOJE</span>}
-                      </div>
+                <div key={r.id} style={{background:C.white,borderRadius:16,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${isActive?C.blue:C.grayDim}`,overflow:"hidden"}}>
+                  <div style={{padding:"14px 16px"}}>
+                    {isEditingR ? (
                       <div style={{display:"flex",gap:6}}>
-                        {!isActive ? (
-                          <Btn variant="blue" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>ativarRota(r.id)}>🎯 Ativar para hoje</Btn>
-                        ) : (
-                          <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12,opacity:0.8,cursor:"default"}}>✓ Em andamento</Btn>
-                        )}
-                        <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️</Btn>
-                        {isDelR ? (
-                          <><Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
-                          <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn></>
-                        ) : (
-                          <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
-                        )}
+                        <input value={editRota.nome} onChange={e=>setEditRota({...editRota,nome:e.target.value})} onKeyDown={e=>e.key==="Enter"&&renomearRota(r.id,editRota.nome)} style={ipt} autoFocus/>
+                        <Btn variant="blue" style={{padding:"11px 14px",fontSize:12}} onClick={()=>renomearRota(r.id,editRota.nome)}>OK</Btn>
+                        <Btn variant="ghost" style={{padding:"11px 12px",fontSize:12}} onClick={()=>setEditRota(null)}>✕</Btn>
                       </div>
-                    </>
+                    ) : (
+                      <>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,cursor:"pointer"}}
+                          onClick={()=>setExpandedRota(isExpR?null:r.id)}>
+                          <div>
+                            <p style={{margin:"0 0 3px",fontSize:16,fontWeight:700,color:C.text}}>📍 {r.nome}</p>
+                            <p style={{margin:0,fontSize:12,color:C.muted}}>{qtd} PDV{qtd!==1?"s":""}</p>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            {isActive&&<span style={{fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99,background:C.blueDim,color:C.blue}}>ATIVA HOJE</span>}
+                            <i className={`ti ${isExpR?"ti-chevron-up":"ti-chevron-down"}`} style={{fontSize:14,color:C.muted}}/>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:6}}>
+                          {!isActive ? (
+                            <Btn variant="blue" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>ativarRota(r.id)}>🎯 Ativar para hoje</Btn>
+                          ) : (
+                            <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12,opacity:0.8,cursor:"default"}}>✓ Em andamento</Btn>
+                          )}
+                          <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️</Btn>
+                          {isDelR ? (
+                            <><Btn variant="danger" style={{padding:"10px 0",fontSize:11,flex:1}} onClick={()=>removerRota(r.id)}>Confirmar</Btn>
+                            <Btn variant="ghost" style={{padding:"10px 10px",fontSize:11}} onClick={()=>setConfirmDelRota(null)}>✕</Btn></>
+                          ) : (
+                            <Btn variant="danger" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDelRota(r.id)}>🗑</Btn>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {isExpR&&!isEditingR&&(
+                    <div style={{borderTop:"1px solid #f3f4f6",padding:"10px 16px 14px"}}>
+                      {pdvsRota.length===0 ? (
+                        <p style={{margin:0,textAlign:"center",color:C.muted,fontSize:12,padding:"8px 0"}}>Nenhum PDV nesta rota ainda.</p>
+                      ) : pdvsRota
+                        .sort((a,b)=>{const da=a.visita?daysSince(a.visita):9999,db=b.visita?daysSince(b.visita):9999;return db-da;})
+                        .map(s=>{
+                          const d=s.visita?daysSince(s.visita):null;
+                          const sc=!s.visita?C.muted:d===0?C.green:d<=14?C.amber:C.red;
+                          const sb=!s.visita?"#f3f4f6":d===0?C.greenDim:d<=14?C.amberDim:C.redDim;
+                          const sl=!s.visita?"SEM VISITA":d===0?"EM DIA":d<=14?"RECENTE":"ATRASADO";
+                          return (
+                            <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f9fafb"}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <p style={{margin:"0 0 1px",fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.nome.toLowerCase()}</p>
+                                <p style={{margin:0,fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.end}</p>
+                              </div>
+                              <div style={{textAlign:"right",marginLeft:10,flexShrink:0}}>
+                                <span style={{fontSize:10,fontWeight:600,padding:"2px 6px",borderRadius:5,background:sb,color:sc,display:"block",marginBottom:2}}>{sl}</span>
+                                <span style={{fontSize:11,color:sc,fontWeight:600}}>{d!==null?d===0?"hoje":`${d}d`:"nunca"}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
                   )}
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* ── ABA PENDENTES (desktop sidebar only) ── */}
-      {aba==="pendentes"&&(
-        <div style={{padding:"1rem"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
-            {[
-              {label:"Nunca",  val:stores.filter(s=>!s.visita).length,        color:C.muted, bg:"#f3f4f6"},
-              {label:"+30d",   val:stores.filter(s=>s.visita&&daysSince(s.visita)>30).length, color:C.red, bg:C.redDim},
-              {label:"Em dia", val:stores.filter(s=>s.visita&&daysSince(s.visita)<=14).length,color:C.green,bg:C.greenDim},
-            ].map(({label,val,color,bg})=>(
-              <div key={label} style={{background:C.white,borderRadius:14,padding:"12px 10px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-                <div style={{width:36,height:36,borderRadius:10,background:bg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:18}}>
-                  {label==="Nunca"?"🕳️":label==="+30d"?"🚨":"✅"}
-                </div>
-                <p style={{margin:"0 0 2px",fontSize:22,fontWeight:700,color}}>{val}</p>
-                <p style={{margin:0,fontSize:11,color:C.muted}}>{label}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {stores
-              .sort((a,b)=>{const da=a.visita?daysSince(a.visita):9999,db=b.visita?daysSince(b.visita):9999;return db-da;})
-              .map(s=>{
-                const d=s.visita?daysSince(s.visita):null;
-                const color=!s.visita?C.muted:d>=15?C.red:d>=8?C.amber:C.green;
-                const bg=!s.visita?"#f3f4f6":d>=15?C.redDim:d>=8?C.amberDim:C.greenDim;
-                return (
-                  <div key={s.id} style={{background:C.white,borderRadius:12,padding:"12px 14px",boxShadow:"0 2px 6px rgba(0,0,0,0.05)",borderLeft:`4px solid ${color}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{flex:1}}>
-                      <p style={{margin:"0 0 2px",fontSize:14,fontWeight:600,color:C.text}}>{s.nome}</p>
-                      <p style={{margin:0,fontSize:11,color:C.muted}}>{TIPO_LABEL[s.tipo]} · {s.end}</p>
-                    </div>
-                    <div style={{textAlign:"right",marginLeft:8}}>
-                      <p style={{margin:"0 0 2px",fontSize:14,fontWeight:700,color}}>{d!==null?`${d}d`:"nunca"}</p>
-                      {s.visita&&<p style={{margin:0,fontSize:10,color:C.muted}}>{fmtDate(s.visita)}</p>}
-                    </div>
-                  </div>
-                );
-              })}
           </div>
         </div>
       )}
@@ -684,7 +684,6 @@ export default function AdminView({ onLogout }) {
                 {id:"historico",icon:"ti-calendar",label:"Histórico"},
                 {id:"rotas",icon:"ti-map-pin",label:"Rotas"},
                 {id:"consig",icon:"ti-package",label:"Consig."},
-                {id:"pendentes",icon:"ti-alert-circle",label:"Pendentes",badge:neverVisited},
               ]},
             ].map(({sec,items})=>(
               <div key={sec} style={{marginBottom:18}}>
