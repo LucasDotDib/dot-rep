@@ -27,6 +27,7 @@ export default function AdminView({ onLogout }) {
   const [filterPdv, setFilterPdv]     = useState("todos");
   const [filterRotaId, setFilterRotaId] = useState("");
   const [expandedRota, setExpandedRota] = useState(null);
+  const [confirmDesativar, setConfirmDesativar] = useState(false);
   const [layout, setLayout]           = useState(() => localStorage.getItem("admin_layout")||"mobile");
   const [editPdv, setEditPdv]         = useState(null);
 
@@ -112,6 +113,11 @@ export default function AdminView({ onLogout }) {
   const ativarRota = useCallback(async (id) => {
     const { error } = await supabase.from("rota_ativa").update({rota_id:id,ativada_em:new Date().toISOString()}).eq("id",1);
     if(error) setErro(error.message);
+  }, []);
+
+  const desativarRota = useCallback(async () => {
+    const { error } = await supabase.from("rota_ativa").update({rota_id:null,ativada_em:null}).eq("id",1);
+    if(error) setErro(error.message); else setConfirmDesativar(false);
   }, []);
 
   const salvarAgenda = useCallback(async (data, rotaId) => {
@@ -486,8 +492,13 @@ export default function AdminView({ onLogout }) {
                         <div style={{display:"flex",gap:6}}>
                           {!isActive ? (
                             <Btn variant="blue" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>ativarRota(r.id)}>🎯 Ativar para hoje</Btn>
+                          ) : confirmDesativar ? (
+                            <>
+                              <Btn variant="danger" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={desativarRota}>Confirmar desativação</Btn>
+                              <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setConfirmDesativar(false)}>✕</Btn>
+                            </>
                           ) : (
-                            <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12,opacity:0.8,cursor:"default"}}>✓ Em andamento</Btn>
+                            <Btn variant="green" style={{flex:1,padding:"10px 0",fontSize:12}} onClick={()=>setConfirmDesativar(true)}>✓ Ativa — Desativar</Btn>
                           )}
                           <Btn variant="ghost" style={{padding:"10px 12px",fontSize:12}} onClick={()=>setEditRota({id:r.id,nome:r.nome})}>✏️</Btn>
                           {isDelR ? (
