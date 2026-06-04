@@ -152,8 +152,10 @@ export default function AdminView({ onLogout }) {
   );
 
   // ── Derived values ──
-  const rotaAtivaObj  = rotas.find(r=>r.id===rotaAtiva);
-  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaAtiva);
+  const agendaHoje    = agenda.filter(a=>a.data===TODAY);
+  const rotaEfetiva   = agendaHoje[0]?.rota_id || rotaAtiva;
+  const rotaAtivaObj  = rotas.find(r=>r.id===rotaEfetiva);
+  const pdvsRotaAtiva = stores.filter(s=>s.rotaId===rotaEfetiva);
   const visitadosHoje = pdvsRotaAtiva.filter(s=>daysSince(s.visita)===0).length;
   const visitasPorPdv = {};
   for (const v of visitas) { if(!visitasPorPdv[v.pdv_id])visitasPorPdv[v.pdv_id]=[]; visitasPorPdv[v.pdv_id].push(v); }
