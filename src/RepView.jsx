@@ -42,7 +42,8 @@ export default function RepView({ onLogout }) {
     if (pdvs.error) { setErro(pdvs.error.message); return; }
     setStores((pdvs.data||[]).map(fromDB));
     setRotas(rts.data||[]);
-    setRotaAtiva(ativa.data?.rota_id||null);
+    const ativaHoje = ativa.data?.rota_id && ativa.data?.ativada_em?.startsWith(TODAY);
+    setRotaAtiva(ativaHoje ? ativa.data.rota_id : null);
     setRotaAgenda(ag.data||null);
     setAgendaSemana(agSem.data||[]);
     const hist={};

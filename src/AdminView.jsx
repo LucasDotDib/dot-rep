@@ -44,7 +44,8 @@ export default function AdminView({ onLogout }) {
     setStores((pdvs.data||[]).map(fromDB));
     setVisitas(vis.data||[]);
     setRotas(rts.data||[]);
-    setRotaAtiva(ativa.data?.rota_id||null);
+    const ativaHoje = ativa.data?.rota_id && ativa.data?.ativada_em?.startsWith(TODAY);
+    setRotaAtiva(ativaHoje ? ativa.data.rota_id : null);
     setAgenda(ag.data||[]);
   }, []);
 
